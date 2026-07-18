@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"html/template"
+	"log/slog"
 	"net/smtp"
 	"os"
 	"path/filepath"
@@ -33,9 +34,12 @@ var jobQueue chan mailJob
 var workerOnce sync.Once
 
 type mailJob struct {
-	To      string
-	Mail    Mailable
-	Retries int
+	To        string
+	Mail      Mailable
+	Retries   int
+	SMTP      *SMTPConfig
+	FromEmail string
+	FromName  string
 }
 
 func NewMailer() *Mailer {
@@ -225,11 +229,19 @@ func (m *Mailer) Send(toEmail string, mail Mailable) error {
 // Queue sends the mailable asynchronously (simple goroutine-based queue).
 func (m *Mailer) Queue(toEmail string, mail Mailable) {
 	startMailerWorker()
-	job := mailJob{To: toEmail, Mail: mail, Retries: 0}
+	job := mailJob{
+		To:        toEmail,
+		Mail:      mail,
+		Retries:   0,
+		SMTP:      m.SMTP,
+		FromEmail: m.FromEmail,
+		FromName:  m.FromName,
+	}
+	slog.Info("mail queued", "to", toEmail, "subject", mail.Subject())
 	select {
 	case jobQueue <- job:
 	default:
-		// queue full, fallback to goroutine send
+		slog.Warn("mail queue full, sending directly", "to", toEmail, "subject", mail.Subject())
 		go func() { _ = m.Send(toEmail, mail) }()
 	}
 }
@@ -237,13 +249,29 @@ func (m *Mailer) Queue(toEmail string, mail Mailable) {
 func startMailerWorker() {
 	workerOnce.Do(func() {
 		jobQueue = make(chan mailJob, 200)
-		m := NewMailer()
 		go func() {
 			for j := range jobQueue {
+				// Create a mailer per-job with the correct SMTP config
+				m := &Mailer{
+					FromEmail: j.FromEmail,
+					FromName:  j.FromName,
+					SMTP:      j.SMTP,
+				}
+				slog.Info("email queued",
+					"to", j.To,
+					"subject", j.Mail.Subject(),
+					"template", j.Mail.TemplateBase(),
+				)
 				err := m.Send(j.To, j.Mail)
 				if err != nil {
 					if j.Retries < 3 {
 						j.Retries++
+						slog.Warn("email send failed, retrying",
+							"to", j.To,
+							"subject", j.Mail.Subject(),
+							"retry", j.Retries,
+							"error", err,
+						)
 						// exponential backoff requeue
 						delay := time.Duration(j.Retries*2) * time.Second
 						go func(job mailJob, d time.Duration) {
@@ -251,13 +279,21 @@ func startMailerWorker() {
 							select {
 							case jobQueue <- job:
 							default:
-								// drop if queue full
-								fmt.Println("mail job dropped after retry")
+								slog.Warn("mail job dropped after retry", "to", job.To)
 							}
 						}(j, delay)
 					} else {
-						fmt.Println("mail send failed after retries:", err)
+						slog.Error("email send failed after retries",
+							"to", j.To,
+							"subject", j.Mail.Subject(),
+							"error", err,
+						)
 					}
+				} else {
+					slog.Info("email sent successfully",
+						"to", j.To,
+						"subject", j.Mail.Subject(),
+					)
 				}
 			}
 		}()

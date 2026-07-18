@@ -3,6 +3,7 @@ package keydb
 import (
 	"context"
 	"log"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -20,7 +21,7 @@ func Init(host string, port string, password string, db int) error {
 	})
 
 	// Test connection
-	ctx, cancel := context.WithTimeout(context.Background(), 5)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	if err := Client.Ping(ctx).Err(); err != nil {
