@@ -269,12 +269,44 @@ func (a *App) registerAdminRoutes() {
 
 // registerStoreRoutes wires all core store/public endpoints.
 func (a *App) registerStoreRoutes() {
-	// Root endpoint
-	a.router.GET("/", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "Hello World"})
+	// Debug middleware: log ALL requests with full headers
+	a.router.Use(func(c *gin.Context) {
+		if strings.HasPrefix(c.Request.URL.Path, "/app") {
+			log.Printf("[DEBUG] %s %s from %s | Headers: %v",
+				c.Request.Method, c.Request.URL.Path, c.Request.RemoteAddr, c.Request.Header)
+			c.Next()
+			log.Printf("[DEBUG] %s %s → %d", c.Request.Method, c.Request.URL.Path, c.Writer.Status())
+		} else {
+			c.Next()
+		}
 	})
 
-	// Static assets serving moved into plugins (catalog plugin).
+	// SPA static assets — served from dist
+	spaDist := "./sub_app/webapp/dist"
+	if _, err := os.Stat(spaDist); err == nil {
+		a.router.StaticFS("/app", http.Dir(spaDist))
+		log.Printf("[core] serving SPA from %s at /app", spaDist)
+	}
+
+	// SPA index at root — serve Vite production build directly
+	a.router.GET("/", func(c *gin.Context) {
+		c.File("./sub_app/webapp/dist/index.html")
+	})
+
+	// SPA catch-all: serve index.html for any unmatched route (except API and static assets)
+	a.router.NoRoute(func(c *gin.Context) {
+		path := c.Request.URL.Path
+		// Don't serve SPA for API routes or static assets
+		if len(path) >= 4 && path[:4] == "/api" {
+			c.JSON(http.StatusNotFound, gin.H{"error": "endpoint not found"})
+			return
+		}
+		if len(path) >= 4 && path[:4] == "/app" {
+			c.JSON(http.StatusNotFound, gin.H{"error": "asset not found"})
+			return
+		}
+		c.File("./sub_app/webapp/dist/index.html")
+	})
 
 	// NOTE: assetlinks.json is served by the auth plugin to allow per-plugin
 	// control. Plugin `plugins/auth/plugin.go` registers the handler for

@@ -8,4 +8,9 @@
 .env
 .sync_ignore
 make-sync.yaml
+# Vite / Node
+node_modules/
+sub_app/webapp/dist/
+sub_app/webapp/tsconfig.tsbuildinfo
+
 .sync_temp/ssh-forward-ssh_umahstore_core-1765096256.log

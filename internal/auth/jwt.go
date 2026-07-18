@@ -12,8 +12,10 @@ import (
 var (
 	accessSecret  string
 	refreshSecret string
+	resetSecret   string
 	accessExp     = int(getEnvInt("JWT_ACCESS_EXP_SECONDS", 600))      // 10m
 	refreshExp    = int(getEnvInt("JWT_REFRESH_EXP_SECONDS", 1209600)) // 14d
+	resetExp      = int(getEnvInt("JWT_RESET_EXP_SECONDS", 3600))      // 1h
 )
 
 func init() {
@@ -21,12 +23,14 @@ func init() {
 	if s := os.Getenv("AUTH_JWT_SECRET"); s != "" {
 		accessSecret = s
 		refreshSecret = s
+		resetSecret = s
 		return
 	}
 
 	// Fallback to legacy separate secrets for compatibility
 	accessSecret = getEnv("JWT_ACCESS_SECRET", "change-me-access-secret")
 	refreshSecret = getEnv("JWT_REFRESH_SECRET", "change-me-refresh-secret")
+	resetSecret = getEnv("JWT_RESET_SECRET", accessSecret)
 }
 
 // AccessExpirySeconds returns configured access token lifetime in seconds.
@@ -37,6 +41,11 @@ func AccessExpirySeconds() int {
 // RefreshExpirySeconds returns configured refresh token lifetime in seconds.
 func RefreshExpirySeconds() int {
 	return refreshExp
+}
+
+// ResetExpirySeconds returns configured reset token lifetime in seconds.
+func ResetExpirySeconds() int {
+	return resetExp
 }
 
 func getEnv(key, def string) string {
@@ -89,6 +98,24 @@ func ParseAccessToken(tokenStr string) (string, error) {
 // ParseRefreshToken verifies and returns the subject from a refresh token.
 func ParseRefreshToken(tokenStr string) (string, error) {
 	return parseTokenWithSecret(tokenStr, refreshSecret, "refresh")
+}
+
+// SignResetToken creates a signed JWT reset token for the given subject (user id).
+func SignResetToken(sub string) (string, error) {
+	now := time.Now().UTC()
+	claims := jwt.MapClaims{
+		"sub": sub,
+		"iat": now.Unix(),
+		"exp": now.Add(time.Duration(resetExp) * time.Second).Unix(),
+		"typ": "reset",
+	}
+	t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return t.SignedString([]byte(resetSecret))
+}
+
+// ParseResetToken verifies and returns the subject from a reset token.
+func ParseResetToken(tokenStr string) (string, error) {
+	return parseTokenWithSecret(tokenStr, resetSecret, "reset")
 }
 
 func parseTokenWithSecret(tokenStr, secret, expectType string) (string, error) {

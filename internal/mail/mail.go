@@ -8,14 +8,34 @@ import (
 	"strings"
 )
 
+// SMTPConfig holds SMTP connection settings that can override env defaults.
+type SMTPConfig struct {
+	Host        string `json:"host"`
+	Port        string `json:"port"`
+	User        string `json:"user"`
+	Pass        string `json:"pass"`
+	FromEmail   string `json:"from_email"`
+	FromName    string `json:"from_name"`
+	UseTLS      bool   `json:"use_tls"`
+	UseStartTLS bool   `json:"use_starttls"`
+	SkipVerify  bool   `json:"skip_verify"`
+}
+
 // Note: using stdlib smtp for now; can swap to github.com/wneessen/go-mail later.
 
 func smtpAuth() (addr string, auth smtp.Auth, tlsConfig *tls.Config, useTLS bool, useStartTLS bool) {
-	host := os.Getenv("SMTP_HOST")
-	port := os.Getenv("SMTP_PORT")
-	user := os.Getenv("SMTP_USER")
-	pass := os.Getenv("SMTP_PASS")
-	from := os.Getenv("SMTP_FROM_EMAIL")
+	return smtpAuthWithConfig(nil)
+}
+
+// smtpAuthWithConfig returns SMTP auth params. If cfg is non-nil, its values
+// take precedence over environment variables.
+func smtpAuthWithConfig(cfg *SMTPConfig) (addr string, auth smtp.Auth, tlsConfig *tls.Config, useTLS bool, useStartTLS bool) {
+	host := getEnvOr(cfg, "SMTP_HOST", cfgHost)
+	port := getEnvOr(cfg, "SMTP_PORT", cfgPort)
+	user := getEnvOr(cfg, "SMTP_USER", cfgUser)
+	pass := getEnvOr(cfg, "SMTP_PASS", cfgPass)
+	_ = getEnvOr(cfg, "SMTP_FROM_EMAIL", cfgFromEmail)
+
 	if host == "" {
 		host = "127.0.0.1"
 	}
@@ -30,13 +50,73 @@ func smtpAuth() (addr string, auth smtp.Auth, tlsConfig *tls.Config, useTLS bool
 	}
 
 	// TLS options
-	useTLS = strings.ToLower(strings.TrimSpace(os.Getenv("SMTP_USE_TLS"))) == "true"
-	useStartTLS = strings.ToLower(strings.TrimSpace(os.Getenv("SMTP_STARTTLS"))) == "true"
-	skipVerify := strings.ToLower(strings.TrimSpace(os.Getenv("SMTP_TLS_SKIP_VERIFY"))) == "true"
+	useTLS = getEnvBool(cfg, "SMTP_USE_TLS", cfgUseTLS)
+	useStartTLS = getEnvBool(cfg, "SMTP_STARTTLS", cfgUseStartTLS)
+	skipVerify := getEnvBool(cfg, "SMTP_TLS_SKIP_VERIFY", cfgSkipVerify)
 
 	tlsConfig = &tls.Config{InsecureSkipVerify: skipVerify, ServerName: host}
-	_ = from
 	return
+}
+
+// cfgField helpers map env names to SMTPConfig fields.
+type cfgField int
+
+const (
+	cfgHost cfgField = iota
+	cfgPort
+	cfgUser
+	cfgPass
+	cfgFromEmail
+	cfgFromName
+	cfgUseTLS
+	cfgUseStartTLS
+	cfgSkipVerify
+)
+
+func getEnvOr(cfg *SMTPConfig, envName string, field cfgField) string {
+	if cfg != nil {
+		switch field {
+		case cfgHost:
+			if cfg.Host != "" {
+				return cfg.Host
+			}
+		case cfgPort:
+			if cfg.Port != "" {
+				return cfg.Port
+			}
+		case cfgUser:
+			if cfg.User != "" {
+				return cfg.User
+			}
+		case cfgPass:
+			if cfg.Pass != "" {
+				return cfg.Pass
+			}
+		case cfgFromEmail:
+			if cfg.FromEmail != "" {
+				return cfg.FromEmail
+			}
+		case cfgFromName:
+			if cfg.FromName != "" {
+				return cfg.FromName
+			}
+		}
+	}
+	return os.Getenv(envName)
+}
+
+func getEnvBool(cfg *SMTPConfig, envName string, field cfgField) bool {
+	if cfg != nil {
+		switch field {
+		case cfgUseTLS:
+			return cfg.UseTLS
+		case cfgUseStartTLS:
+			return cfg.UseStartTLS
+		case cfgSkipVerify:
+			return cfg.SkipVerify
+		}
+	}
+	return strings.ToLower(strings.TrimSpace(os.Getenv(envName))) == "true"
 }
 
 // SendConfirmEmail sends confirmation email asynchronously.

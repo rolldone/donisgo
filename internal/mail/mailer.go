@@ -24,6 +24,7 @@ type Mailable interface {
 type Mailer struct {
 	FromEmail string
 	FromName  string
+	SMTP      *SMTPConfig // optional DB override
 }
 
 var tplCache = map[string]*template.Template{}
@@ -42,6 +43,22 @@ func NewMailer() *Mailer {
 		FromEmail: os.Getenv("SMTP_FROM_EMAIL"),
 		FromName:  os.Getenv("SMTP_FROM_NAME"),
 	}
+}
+
+// NewMailerWithConfig creates a Mailer that uses the given SMTPConfig
+// (from DB) instead of environment variables.
+func NewMailerWithConfig(cfg *SMTPConfig) *Mailer {
+	m := NewMailer()
+	if cfg != nil {
+		m.SMTP = cfg
+		if cfg.FromEmail != "" {
+			m.FromEmail = cfg.FromEmail
+		}
+		if cfg.FromName != "" {
+			m.FromName = cfg.FromName
+		}
+	}
+	return m
 }
 
 func (m *Mailer) renderParts(base string, data map[string]interface{}) (htmlPart []byte, textPart []byte, err error) {
@@ -134,7 +151,7 @@ func (m *Mailer) Send(toEmail string, mail Mailable) error {
 
 	subject := mail.Subject()
 
-	addr, auth, tlsCfg, useTLS, useStartTLS := smtpAuth()
+	addr, auth, tlsCfg, useTLS, useStartTLS := smtpAuthWithConfig(m.SMTP)
 
 	// Build multipart message
 	msg := bytes.Buffer{}
