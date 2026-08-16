@@ -7,8 +7,8 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/spf13/cobra"
 
-	"go_framework/internal/pluginloader"
-	"go_framework/internal/plugins"
+	"github.com/rolldone/donisgo/internal/pluginloader"
+	"github.com/rolldone/donisgo/internal/plugins"
 )
 
 var rootCmd = &cobra.Command{

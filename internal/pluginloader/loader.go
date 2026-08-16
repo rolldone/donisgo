@@ -1,12 +1,12 @@
 package pluginloader
 
 import (
-	"go_framework/internal/plugins"
-	pagesplugin "go_framework/plugins/pages"
+	"github.com/rolldone/donisgo/internal/plugins"
+	pagesplugin "github.com/rolldone/donisgo/plugins/pages"
 )
 
 // RegisterCorePlugins registers the set of core plugins supported by
-// go_framework. Dipanggil PALING AWAL (sebelum plugin user didaftarkan).
+// donisgo. Dipanggil PALING AWAL (sebelum plugin user didaftarkan).
 func RegisterCorePlugins() {
 	plugins.RegisterPlugins([]plugins.Plugin{
 		// Add core plugins here
@@ -23,7 +23,7 @@ func RegisterCorePlugins() {
 // Implementasi memakai plugins.EnsurePluginLast → idempotent & dedup: aman
 // dipanggil berkali-kali, pages tetap tepat satu dan selalu di akhir.
 //
-// ⚠️ pages adalah plugin PATEN go_framework — JANGAN dihapus. User TIDAK
+// ⚠️ pages adalah plugin PATEN donisgo — JANGAN dihapus. User TIDAK
 // perlu (dan tidak boleh) mendaftarkannya manual; framework yang mengurus.
 func RegisterLastPlugins() {
 	plugins.EnsurePluginLast(pagesplugin.New())

@@ -6,9 +6,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"go_framework/internal/db"
-	"go_framework/internal/plugins"
-	"go_framework/internal/storage"
+	"github.com/rolldone/donisgo/internal/db"
+	"github.com/rolldone/donisgo/internal/plugins"
+	"github.com/rolldone/donisgo/internal/storage"
 
 	"gorm.io/gorm"
 )

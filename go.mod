@@ -1,4 +1,4 @@
-module go_framework
+module github.com/rolldone/donisgo
 
 go 1.25.3
 

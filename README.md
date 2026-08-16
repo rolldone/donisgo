@@ -1,9 +1,9 @@
-Architecture & Request Flow
-===========================
+Donisgo — Architecture & Request Flow
+=====================================
 
 Summary
 -------
-This repository is a modular Go web application framework for backend services. The documentation here explains the architecture, request flow, important environment variables, and how to run development tools (server and console).
+**Donisgo** (formerly `go_framework`) is a modular Go web application framework for backend services. The documentation here explains the architecture, request flow, important environment variables, and how to run development tools (server and console).
 
 Table of contents
 -----------------
@@ -398,7 +398,7 @@ package mytest
 import (
     "testing"
     "time"
-    "go_framework/internal/auth"
+    "github.com/rolldone/donisgo/internal/auth"
 )
 
 func TestJWT(t *testing.T) {
@@ -651,7 +651,7 @@ Testing & safety
 
 Built-in plugins (permanent — jangan dihapus)
 ---------------------------------------------
-go_framework memiliki plugin "bawaan"/paten yang otomatis didaftarkan oleh
+donisgo memiliki plugin "bawaan"/paten yang otomatis didaftarkan oleh
 framework — user TIDAK perlu (dan tidak boleh) mendaftarkannya manual:
 
 - **`pages`** (`plugins/pages/plugin.go`) — melayani SPA dari
@@ -743,8 +743,8 @@ To manually create a plugin or understand the structure:
 ```go
 import (
    // ... other imports
-   "go_framework/internal/plugins"
-   myplugin "go_framework/plugins/my_plugin"  // note: use underscore for import path
+   "github.com/rolldone/donisgo/internal/plugins"
+   myplugin "github.com/rolldone/donisgo/plugins/my_plugin"  // note: use underscore for import path
 )
 
 func main() {
@@ -763,9 +763,9 @@ func main() {
 ```go
 import (
    // ... other imports
-   "go_framework/internal/console"
-   "go_framework/internal/plugins"
-   myplugin "go_framework/plugins/my_plugin"  // note: use underscore for import path
+   "github.com/rolldone/donisgo/internal/console"
+   "github.com/rolldone/donisgo/internal/plugins"
+   myplugin "github.com/rolldone/donisgo/plugins/my_plugin"  // note: use underscore for import path
 )
 
 func main() {
@@ -784,7 +784,7 @@ package myplugin
 import (
    "github.com/gin-gonic/gin"
    "github.com/spf13/cobra"
-   "go_framework/internal/plugins"
+   "github.com/rolldone/donisgo/internal/plugins"
 )
 
 type MyPlugin struct{}

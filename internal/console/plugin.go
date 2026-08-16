@@ -228,8 +228,8 @@ func pluginGoTemplateMinimal(pkg, id, display string, includeConsole bool) strin
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
-	"go_framework/internal/plugins"
-	pluginhandlers "go_framework/plugins/%s/handlers"
+	"github.com/rolldone/donisgo/internal/plugins"
+	pluginhandlers "github.com/rolldone/donisgo/plugins/%s/handlers"
 )
 
 // Plugin %s provides a minimal scaffold.
@@ -280,8 +280,8 @@ func pluginGoTemplateCRUD(pkg, id, display string, includeConsole bool) string {
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
-	"go_framework/internal/plugins"
-	pluginhandlers "go_framework/plugins/%s/handlers"
+	"github.com/rolldone/donisgo/internal/plugins"
+	pluginhandlers "github.com/rolldone/donisgo/plugins/%s/handlers"
 )
 
 // Plugin %s provides a CRUD sample scaffold.
@@ -333,8 +333,8 @@ func pluginGoTemplateMiddleware(pkg, id, display string, includeConsole bool) st
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
-	"go_framework/internal/plugins"
-	pluginmiddleware "go_framework/plugins/%s/middleware"
+	"github.com/rolldone/donisgo/internal/plugins"
+	pluginmiddleware "github.com/rolldone/donisgo/plugins/%s/middleware"
 )
 
 // Plugin %s provides a middleware-only sample scaffold.
@@ -443,7 +443,7 @@ import (
 	"context"
 	"log"
 
-	"go_framework/internal/events"
+	"github.com/rolldone/donisgo/internal/events"
 )
 
 // registerEventHandlers registers example event handlers for the plugin.

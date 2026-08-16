@@ -16,8 +16,8 @@ import (
 	"github.com/spf13/cobra"
 	"gorm.io/gorm"
 
-	"go_framework/internal/db"
-	"go_framework/internal/plugins"
+	"github.com/rolldone/donisgo/internal/db"
+	"github.com/rolldone/donisgo/internal/plugins"
 )
 
 const (

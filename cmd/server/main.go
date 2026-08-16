@@ -1,6 +1,6 @@
-// @title Umahstore Admin API
+// @title Donisgo API
 // @version 1.0
-// @description Admin API for Umahstore - auto-generated swagger docs
+// @description Admin API for donisgo - auto-generated swagger docs
 // @termsOfService http://example.com/terms/
 // @contact.name API Support
 // @contact.url http://www.example.com/support
@@ -15,7 +15,7 @@ import (
 	"log"
 	"syscall"
 
-	"go_framework/internal/app"
+	"github.com/rolldone/donisgo/internal/app"
 )
 
 // main is a thin entrypoint; core boot logic lives in internal/app.
@@ -32,7 +32,7 @@ func main() {
 	err := app.Run(app.Options{
 		RegisterPlugins: func() {
 			// Register your custom plugins here. Example:
-			// import "go_framework/plugins/myplugin"
+			// import "github.com/rolldone/donisgo/plugins/myplugin"
 			// plugins.RegisterPlugins([]plugins.Plugin{
 			//     myplugin.New(),
 			// })

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"go_framework/internal/events"
+	"github.com/rolldone/donisgo/internal/events"
 )
 
 // TestRequestReply demonstrates a safe request-reply pattern using RequestReply.

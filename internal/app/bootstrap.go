@@ -17,16 +17,16 @@ import (
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 
-	"go_framework/internal/db"
-	"go_framework/internal/keydb"
-	"go_framework/internal/pluginloader"
-	"go_framework/internal/plugins"
-	"go_framework/internal/storage"
+	"github.com/rolldone/donisgo/internal/db"
+	"github.com/rolldone/donisgo/internal/keydb"
+	"github.com/rolldone/donisgo/internal/pluginloader"
+	"github.com/rolldone/donisgo/internal/plugins"
+	"github.com/rolldone/donisgo/internal/storage"
 
 	"gorm.io/gorm"
 )
 
-// Options customizes how the Umahstore app boots.
+// Options customizes how the donisgo app boots.
 type Options struct {
 	// RegisterPlugins allows callers to register additional plugins (user-provided).
 	RegisterPlugins func()
