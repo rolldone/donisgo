@@ -248,6 +248,10 @@ func (a *App) attachPlugins(registerPlugins func()) error {
 	if registerPlugins != nil {
 		registerPlugins()
 	}
+	// Framework "bawaan" plugins (pages) dijamin SELALU terakhir di registry
+	// — mereka memegang wildcard/catch-all (router.NoRoute). JANGAN dipindah
+	// sebelum registerPlugins(), atau urutan pages jadi salah.
+	pluginloader.RegisterLastPlugins()
 
 	plugins.AttachMiddleware(map[string]*gin.RouterGroup{
 		"global": a.rootGroup,
@@ -268,56 +272,16 @@ func (a *App) registerAdminRoutes() {
 }
 
 // registerStoreRoutes wires all core store/public endpoints.
+// PR-20260816: KOSONG (sengaja) — SPA serving, root "/", NoRoute catch-all,
+// StaticFS, dan wildcard SEMUA pindah ke plugin `pages` (plugins/pages/
+// plugin.go — plugin bawaan framework). Bootstrap tidak handle route
+// tampilan lagi.
+//
+// ⚠️ Fungsi ini sengaja dibiarkan ADA + kosong — TITIK FORCE: kalau suatu
+// saat butuh route publik yang harus di-register paling awal (sebelum
+// plugin) — taruh DI SINI dengan komentar jelas kenapa harus di sini.
 func (a *App) registerStoreRoutes() {
-	// Debug middleware: log ALL requests with full headers
-	a.router.Use(func(c *gin.Context) {
-		if strings.HasPrefix(c.Request.URL.Path, "/app") {
-			log.Printf("[DEBUG] %s %s from %s | Headers: %v",
-				c.Request.Method, c.Request.URL.Path, c.Request.RemoteAddr, c.Request.Header)
-			c.Next()
-			log.Printf("[DEBUG] %s %s → %d", c.Request.Method, c.Request.URL.Path, c.Writer.Status())
-		} else {
-			c.Next()
-		}
-	})
-
-	// SPA static assets — served from dist
-	spaDist := "./sub_app/webapp/dist"
-	if _, err := os.Stat(spaDist); err == nil {
-		a.router.StaticFS("/app", http.Dir(spaDist))
-		log.Printf("[core] serving SPA from %s at /app", spaDist)
-	}
-
-	// SPA index at root — serve Vite production build directly
-	a.router.GET("/", func(c *gin.Context) {
-		c.File("./sub_app/webapp/dist/index.html")
-	})
-
-	// SPA catch-all: serve index.html for any unmatched route (except API and static assets)
-	a.router.NoRoute(func(c *gin.Context) {
-		path := c.Request.URL.Path
-		// Don't serve SPA for API routes or static assets
-		if len(path) >= 4 && path[:4] == "/api" {
-			c.JSON(http.StatusNotFound, gin.H{"error": "endpoint not found"})
-			return
-		}
-		if len(path) >= 4 && path[:4] == "/app" {
-			c.JSON(http.StatusNotFound, gin.H{"error": "asset not found"})
-			return
-		}
-		c.File("./sub_app/webapp/dist/index.html")
-	})
-
-	// NOTE: assetlinks.json is served by the auth plugin to allow per-plugin
-	// control. Plugin `plugins/auth/plugin.go` registers the handler for
-	// `/.well-known/assetlinks.json`. The global handler was removed to avoid
-	// duplicate route registration.
-
-	// API root endpoint - match Python FastAPI behavior
-	apiGroup := a.router.Group("/api")
-	apiGroup.GET("/", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "Hello World"})
-	})
+	// (kosong — lihat komentar di atas)
 }
 
 // registerSwaggerRoutes registers handlers for serving the generated swagger JSON and UI.

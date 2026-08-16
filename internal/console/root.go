@@ -26,6 +26,10 @@ func Execute() {
 
 // Run executes the root command with the provided arguments.
 func Run(args []string) error {
+	// Framework "bawaan" plugins (pages) dijamin selalu terakhir di registry
+	// untuk console juga. EnsurePluginLast idempotent → aman dipanggil di sini
+	// setelah RegisterAdditionalPlugins (user) di cmd/console/main.go.
+	pluginloader.RegisterLastPlugins()
 	rootCmd.SetArgs(args)
 	return rootCmd.Execute()
 }

@@ -20,6 +20,11 @@ import (
 
 // main is a thin entrypoint; core boot logic lives in internal/app.
 // Register custom plugins here if needed, similar to Laravel's bootstrap/app.php.
+//
+// NOTE: plugin `pages` (SPA serving + wildcard catch-all) adalah plugin
+// BAWAAN/paten framework — otomatis didaftarkan PALING AKHIR oleh
+// internal/pluginloader (RegisterLastPlugins), dipanggil dari bootstrap.
+// JANGAN didaftarkan manual di sini.
 func main() {
 	// Set permissive umask so created files/dirs are group-writable by default
 	syscall.Umask(0o002)
@@ -31,6 +36,9 @@ func main() {
 			// plugins.RegisterPlugins([]plugins.Plugin{
 			//     myplugin.New(),
 			// })
+			//
+			// Plugin user apa pun yang didaftarkan di sini selalu di-register
+			// SEBELUM pages — pages dijamin terakhir oleh framework.
 		},
 	})
 	if err != nil {

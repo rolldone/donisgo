@@ -635,7 +635,7 @@ This project includes a pluggable architecture so features can be implemented as
 - Types & priorities: `internal/plugins/types.go` and `internal/plugins/middleware_priorities.go` — define plugin interfaces and middleware ordering.
 
 Key concepts
-- Discovery: plugins are created under the `plugins/` directory (currently empty in this starter framework). Each plugin has its own folder with optional `migrations/`, handlers, and registration code.
+- Discovery: plugins are created under the `plugins/` directory. Each plugin has its own folder with optional `migrations/`, handlers, and registration code. `plugins/` already ships two framework packages: `pages` (built-in, see below) and `plugin_registry` (inter-plugin contracts).
 - Registration: plugins register themselves with the registry during application bootstrap in `cmd/server/main.go` and `cmd/console/main.go`; this allows them to add routes, middleware, and service hooks.
 - Service deps: plugins receive shared dependencies through `plugins.ServiceDeps`, currently `DB *gorm.DB` and `Store storage.Store`.
 - Middleware ordering: plugin middleware is executed according to priorities defined in `internal/plugins/middleware_priorities.go`. Valid targets are `global`, `admin`, and `api`.
@@ -648,6 +648,44 @@ Integration notes
 
 Testing & safety
 - Test plugins in isolation by running their handlers/services against a test instance of the registry and a sandbox DB.
+
+Built-in plugins (permanent — jangan dihapus)
+---------------------------------------------
+go_framework memiliki plugin "bawaan"/paten yang otomatis didaftarkan oleh
+framework — user TIDAK perlu (dan tidak boleh) mendaftarkannya manual:
+
+- **`pages`** (`plugins/pages/plugin.go`) — melayani SPA dari
+  `./sub_app/webapp/dist`, wildcard/catch-all via `router.NoRoute`, dan proxy
+  homepage opsional (`HOMEPAGE_URL`). Selalu di-register **PALING AKHIR** oleh
+  `pluginloader.RegisterLastPlugins()`:
+  - Server: dipanggil dari `internal/app/bootstrap.go` (`attachPlugins`)
+    SETELAH plugin user didaftarkan.
+  - Console: dipanggil dari `internal/console/root.go` (`Run`).
+  Karena ia memegang `router.NoRoute`, urutan terakhir ini WAJIB — semua route
+  spesifik (api/admin/health) dari plugin lain harus menang duluan.
+  ⚠️ **Plugin ini PATEN — JANGAN dihapus.** Registrasinya otomatis via
+  `plugins.EnsurePluginLast` (idempotent + dedup), jadi pages selalu tepat
+  satu dan di akhir, apa pun yang didaftarkan user di `cmd/server/main.go` /
+  `cmd/console/main.go`.
+
+Plugin Registry (komunikasi antar plugin)
+-----------------------------------------
+`plugins/plugin_registry` menyediakan mekanisme berbagi interface fungsi antar
+plugin tanpa circular import:
+
+1. Definisikan interface contract di `plugin_registry/registry.go`
+   (mis. `ChatProvider`).
+2. Plugin **PROVIDER** mendaftarkan implementasinya via `Register<X>Provider(...)`
+   di `RegisterServices(deps)`.
+3. Plugin **CONSUMER** memanggil delegation function (mis. `SendMessage(...)`).
+4. Keduanya hanya import `plugin_registry` — tidak saling import.
+5. Setiap delegation function punya **nil-guard**: tanpa provider terdaftar,
+   kembalikan default aman (bukan panic).
+
+Panduan menambah contract baru + contoh `EchoProvider` ada di komentar
+`plugins/plugin_registry/registry.go`. Error bersama antar plugin
+didefinisikan di `plugins/plugin_registry/errors.go` (dideteksi via
+`errors.As`).
 
 Plugin quickstart (CLI generator)
 ---------------------------------

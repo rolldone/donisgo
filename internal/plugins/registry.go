@@ -22,6 +22,23 @@ func RegisterPlugins(p []Plugin) {
 	registered = append(registered, p...)
 }
 
+// EnsurePluginLast registers p at the END of the registry. Jika plugin dengan
+// ID yang sama sudah terdaftar, entri lama dipindah ke akhir (dedup) sehingga
+// plugin tersebut terdaftar tepat satu kali dan selalu menjadi yang terakhir.
+//
+// Dipakai untuk plugin "bawaan" framework yang memegang wildcard/catch-all
+// (mis. `pages` via router.NoRoute) — menjamin urutan terakhir tidak peduli
+// apa pun yang didaftarkan pemanggil di cmd/server/main.go / cmd/console.
+func EnsurePluginLast(p Plugin) {
+	for i, existing := range registered {
+		if existing.ID() == p.ID() {
+			registered = append(registered[:i], registered[i+1:]...)
+			break
+		}
+	}
+	registered = append(registered, p)
+}
+
 // RegisterAllServices lets plugins extend the service bundle.
 func RegisterAllServices(db *gorm.DB, store storage.Store) error {
 	deps := ServiceDeps{DB: db, Store: store}
