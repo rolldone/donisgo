@@ -14,3 +14,6 @@ sub_app/webapp/dist/
 sub_app/webapp/tsconfig.tsbuildinfo
 
 .sync_temp/ssh-forward-ssh_umahstore_core-1765096256.log
+
+# Historic (work-memory, local-only)
+.historic/
