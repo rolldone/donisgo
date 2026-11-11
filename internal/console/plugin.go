@@ -84,16 +84,19 @@ var pluginNewCmd = &cobra.Command{
 			}
 		}
 
+		// Read the actual module path once so generated imports match this project's go.mod.
+		mod := modulePath()
+
 		// Files
 		var pluginContent string
 		switch tmpl {
 		case "minimal":
-			pluginContent = pluginGoTemplateMinimal(pkgName, id, display, !pluginSkipConsole)
+			pluginContent = pluginGoTemplateMinimal(mod, pkgName, id, display, !pluginSkipConsole)
 			if err := writeFileIfMissing(filepath.Join(base, "handlers", "health.go"), pluginHandlerTemplate(id)); err != nil {
 				return err
 			}
 		case "crud":
-			pluginContent = pluginGoTemplateCRUD(pkgName, id, display, !pluginSkipConsole)
+			pluginContent = pluginGoTemplateCRUD(mod, pkgName, id, display, !pluginSkipConsole)
 			if err := writeFileIfMissing(filepath.Join(base, "handlers", "resource.go"), pluginCRUDHandlerTemplate(id)); err != nil {
 				return err
 			}
@@ -101,7 +104,7 @@ var pluginNewCmd = &cobra.Command{
 				return err
 			}
 		case "middleware":
-			pluginContent = pluginGoTemplateMiddleware(pkgName, id, display, !pluginSkipConsole)
+			pluginContent = pluginGoTemplateMiddleware(mod, pkgName, id, display, !pluginSkipConsole)
 			if err := writeFileIfMissing(filepath.Join(base, "middleware", "sample.go"), pluginMiddlewareTemplate(id)); err != nil {
 				return err
 			}
@@ -120,7 +123,7 @@ var pluginNewCmd = &cobra.Command{
 		}
 
 		// example events file showing how to subscribe/publish internal events
-		if err := writeFileIfMissing(filepath.Join(base, "events.go"), pluginEventsTemplate(pkgName, id)); err != nil {
+		if err := writeFileIfMissing(filepath.Join(base, "events.go"), pluginEventsTemplate(pkgName, id, mod)); err != nil {
 			return err
 		}
 
@@ -168,6 +171,26 @@ func writeFileIfMissing(path, content string) error {
 	return os.WriteFile(path, []byte(content), 0o666)
 }
 
+// modulePath reads the current module path from go.mod so generated plugin
+// templates reference the actual module (which may differ from donisgo
+// when the framework is used as a scaffold). Falls back to "github.com/rolldone/donisgo".
+func modulePath() string {
+	const fallback = "github.com/rolldone/donisgo"
+	data, err := os.ReadFile("go.mod")
+	if err != nil {
+		return fallback
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "module ") {
+			if mp := strings.TrimSpace(strings.TrimPrefix(line, "module ")); mp != "" {
+				return strings.Trim(strings.SplitN(mp, "//", 2)[0], `" `)
+			}
+		}
+	}
+	return fallback
+}
+
 // packageNameFromID produces a valid Go package name from a plugin id.
 func packageNameFromID(id string) string {
 	base := strings.Builder{}
@@ -206,7 +229,7 @@ func toUpper(r rune) rune {
 	return r
 }
 
-func pluginGoTemplateMinimal(pkg, id, display string, includeConsole bool) string {
+func pluginGoTemplateMinimal(mod, pkg, id, display string, includeConsole bool) string {
 	consoleBlock := ""
 	if includeConsole {
 		consoleBlock = fmt.Sprintf(`
@@ -228,8 +251,8 @@ func pluginGoTemplateMinimal(pkg, id, display string, includeConsole bool) strin
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
-	"github.com/rolldone/donisgo/internal/plugins"
-	pluginhandlers "github.com/rolldone/donisgo/plugins/%s/handlers"
+	"%s/internal/plugins"
+	pluginhandlers "%s/plugins/%s/handlers"
 )
 
 // Plugin %s provides a minimal scaffold.
@@ -255,10 +278,10 @@ func (p *Plugin) Seed() error { return nil }
 
 func (p *Plugin) ConsoleCommands() []*cobra.Command {
 %s}
-`, pkg, id, display, id, id, consoleBlock)
+`, pkg, mod, mod, id, display, id, id, consoleBlock)
 }
 
-func pluginGoTemplateCRUD(pkg, id, display string, includeConsole bool) string {
+func pluginGoTemplateCRUD(mod, pkg, id, display string, includeConsole bool) string {
 	consoleBlock := ""
 	if includeConsole {
 		consoleBlock = fmt.Sprintf(`
@@ -280,8 +303,8 @@ func pluginGoTemplateCRUD(pkg, id, display string, includeConsole bool) string {
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
-	"github.com/rolldone/donisgo/internal/plugins"
-	pluginhandlers "github.com/rolldone/donisgo/plugins/%s/handlers"
+	"%s/internal/plugins"
+	pluginhandlers "%s/plugins/%s/handlers"
 )
 
 // Plugin %s provides a CRUD sample scaffold.
@@ -308,10 +331,10 @@ func (p *Plugin) Seed() error { return nil }
 
 func (p *Plugin) ConsoleCommands() []*cobra.Command {
 %s}
-`, pkg, id, display, id, id, id, id, consoleBlock)
+`, pkg, mod, mod, id, display, id, id, id, id, consoleBlock)
 }
 
-func pluginGoTemplateMiddleware(pkg, id, display string, includeConsole bool) string {
+func pluginGoTemplateMiddleware(mod, pkg, id, display string, includeConsole bool) string {
 	consoleBlock := ""
 	if includeConsole {
 		consoleBlock = fmt.Sprintf(`
@@ -333,8 +356,8 @@ func pluginGoTemplateMiddleware(pkg, id, display string, includeConsole bool) st
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
-	"github.com/rolldone/donisgo/internal/plugins"
-	pluginmiddleware "github.com/rolldone/donisgo/plugins/%s/middleware"
+	"%s/internal/plugins"
+	pluginmiddleware "%s/plugins/%s/middleware"
 )
 
 // Plugin %s provides a middleware-only sample scaffold.
@@ -366,7 +389,7 @@ func (p *Plugin) Seed() error { return nil }
 
 func (p *Plugin) ConsoleCommands() []*cobra.Command {
 %s}
-`, pkg, id, display, id, id, consoleBlock)
+`, pkg, mod, mod, id, display, id, id, consoleBlock)
 }
 
 func pluginHandlerTemplate(id string) string {
@@ -436,14 +459,14 @@ func SampleMiddleware(c *gin.Context) {
 
 // pluginEventsTemplate returns a sample events.go that demonstrates subscribing to
 // and handling internal events. It's written into the generated plugin package.
-func pluginEventsTemplate(pkg, id string) string {
+func pluginEventsTemplate(pkg, id, mod string) string {
 	return fmt.Sprintf(`package %s
 
 import (
 	"context"
 	"log"
 
-	"github.com/rolldone/donisgo/internal/events"
+	"%s/internal/events"
 )
 
 // registerEventHandlers registers example event handlers for the plugin.
@@ -454,5 +477,5 @@ func registerEventHandlers() {
 			_ = ctx
 		})
 }
-`, pkg, id)
+`, pkg, mod, id)
 }
