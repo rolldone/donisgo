@@ -10,9 +10,14 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+// AccessClaims is the JWT claim set produced by GenerateAccessTokenWithLevel.
+// It carries the admin identifier, its level, and the standard registered
+// claims (expiry, issued-at).
 type AccessClaims struct {
+	// AdminID is the admin/user identifier the token was issued for.
 	AdminID string `json:"admin_id"`
-	Level   string `json:"level"`
+	// Level is the caller's authorization level (e.g. "admin", "user").
+	Level string `json:"level"`
 	jwt.RegisteredClaims
 }
 
@@ -78,6 +83,10 @@ func (a *Auth) ParseAccessTokenClaims(tokenStr string) (*AccessClaims, error) {
 	return nil, errors.New("invalid token")
 }
 
+// GenerateOpaqueRefreshToken returns a random opaque refresh token (96 hex
+// characters) together with its SHA-256 hex digest. Store the hash in your
+// database and return the plain token to the client; compare later with
+// HashOpaqueToken. It is a pure helper and needs no Auth instance.
 func GenerateOpaqueRefreshToken() (plain string, hash string, err error) {
 	b := make([]byte, 48)
 	if _, err = rand.Read(b); err != nil {
@@ -89,6 +98,8 @@ func GenerateOpaqueRefreshToken() (plain string, hash string, err error) {
 	return plain, hash, nil
 }
 
+// HashOpaqueToken returns the SHA-256 hex digest of an opaque token, matching
+// the hash produced by GenerateOpaqueRefreshToken.
 func HashOpaqueToken(tok string) string {
 	h := sha256.Sum256([]byte(tok))
 	return hex.EncodeToString(h[:])

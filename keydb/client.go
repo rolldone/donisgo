@@ -11,10 +11,14 @@ import (
 
 // Config describes a KeyDB/Redis connection.
 type Config struct {
-	Host     string
-	Port     string
+	// Host is the server hostname or IP. Required.
+	Host string
+	// Port is the server port (as a string, e.g. "6379"). Required.
+	Port string
+	// Password is the optional AUTH password.
 	Password string
-	DB       int
+	// DB is the logical database number.
+	DB int
 }
 
 // Client is an instance-scoped KeyDB/Redis handle. Each App (or test) can hold

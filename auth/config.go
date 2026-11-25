@@ -19,14 +19,21 @@ const (
 // Secrets are required: New returns an error when any of them is empty, so an
 // instance can never fall back to an insecure built-in default.
 type Config struct {
-	AccessSecret  string
+	// AccessSecret signs and verifies access tokens. Required.
+	AccessSecret string
+	// RefreshSecret signs and verifies refresh tokens. Required.
 	RefreshSecret string
-	ResetSecret   string
+	// ResetSecret signs and verifies password-reset tokens. Required.
+	ResetSecret string
 
 	// Lifetimes; zero values are replaced by the Default*TTL constants.
-	AccessTTL  time.Duration
+	//
+	// AccessTTL is the access-token lifetime (default DefaultAccessTTL).
+	AccessTTL time.Duration
+	// RefreshTTL is the refresh-token lifetime (default DefaultRefreshTTL).
 	RefreshTTL time.Duration
-	ResetTTL   time.Duration
+	// ResetTTL is the reset-token lifetime (default DefaultResetTTL).
+	ResetTTL time.Duration
 }
 
 // Auth signs and verifies tokens with the secrets and lifetimes from its

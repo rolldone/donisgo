@@ -8,15 +8,16 @@ import (
 	"path/filepath"
 )
 
-// LocalStore mengimplementasikan Store interface untuk local filesystem
+// LocalStore implements Store on top of the local filesystem.
 type LocalStore struct {
-	root      string // direktori storage
-	publicURL string // base URL untuk akses publik
+	root      string // storage root directory
+	publicURL string // public base URL
 }
 
-// NewLocalStore membuat instance LocalStore baru
+// NewLocalStore returns a LocalStore rooted at root, creating the directory
+// when missing. publicURL is the public base URL used by PublicURL.
 func NewLocalStore(root, publicURL string) (*LocalStore, error) {
-	// ensure direktori ada
+	// ensure the directory exists
 	if err := os.MkdirAll(root, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create storage directory: %w", err)
 	}
@@ -27,23 +28,23 @@ func NewLocalStore(root, publicURL string) (*LocalStore, error) {
 	}, nil
 }
 
-// Put menyimpan file ke local filesystem
+// Put writes the reader's content to key on the local filesystem.
 func (s *LocalStore) Put(ctx context.Context, key string, data io.Reader) error {
 	fullPath := filepath.Join(s.root, key)
 
-	// ensure parent directory ada
+	// ensure the parent directory exists
 	if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	// create/overwrite file
+	// create or overwrite the file
 	f, err := os.Create(fullPath)
 	if err != nil {
 		return fmt.Errorf("failed to create file: %w", err)
 	}
 	defer f.Close()
 
-	// copy file content
+	// copy the content
 	if _, err := io.Copy(f, data); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
@@ -51,7 +52,7 @@ func (s *LocalStore) Put(ctx context.Context, key string, data io.Reader) error 
 	return nil
 }
 
-// Get mengambil file dari local filesystem sebagai ReadCloser
+// Get opens the file under key for reading.
 func (s *LocalStore) Get(ctx context.Context, key string) (io.ReadCloser, error) {
 	fullPath := filepath.Join(s.root, key)
 
@@ -66,7 +67,7 @@ func (s *LocalStore) Get(ctx context.Context, key string) (io.ReadCloser, error)
 	return f, nil
 }
 
-// Delete menghapus file dari local filesystem
+// Delete removes the file under key.
 func (s *LocalStore) Delete(ctx context.Context, key string) error {
 	fullPath := filepath.Join(s.root, key)
 
@@ -80,7 +81,7 @@ func (s *LocalStore) Delete(ctx context.Context, key string) error {
 	return nil
 }
 
-// Stat mengambil metadata file
+// Stat returns the file's metadata.
 func (s *LocalStore) Stat(ctx context.Context, key string) (*FileMeta, error) {
 	fullPath := filepath.Join(s.root, key)
 
@@ -99,7 +100,7 @@ func (s *LocalStore) Stat(ctx context.Context, key string) (*FileMeta, error) {
 	}, nil
 }
 
-// List menampilkan semua keys dengan prefix tertentu
+// List returns all keys that start with prefix.
 func (s *LocalStore) List(ctx context.Context, prefix string) ([]string, error) {
 	prefixPath := filepath.Join(s.root, prefix)
 	var keys []string
@@ -113,16 +114,16 @@ func (s *LocalStore) List(ctx context.Context, prefix string) ([]string, error) 
 			return nil
 		}
 
-		// calculate relative path sebagai key
+		// key is the path relative to the root
 		rel, err := filepath.Rel(s.root, path)
 		if err != nil {
 			return err
 		}
 
-		// gunakan forward slashes untuk consistency
+		// use forward slashes for consistency
 		key := filepath.ToSlash(rel)
 
-		// filter by prefix jika ada
+		// filter by prefix when given
 		if prefix == "" || (len(path) >= len(prefixPath) && path[:len(prefixPath)] == prefixPath) {
 			keys = append(keys, key)
 		}
@@ -133,19 +134,20 @@ func (s *LocalStore) List(ctx context.Context, prefix string) ([]string, error) 
 	return keys, err
 }
 
-// PublicURL mengembalikan URL publik untuk akses file
-// Untuk local storage, ini akan menjadi path relatif dari base publicURL
+// PublicURL returns the public URL for key, built from the store's public base
+// URL.
 func (s *LocalStore) PublicURL(ctx context.Context, key string) (string, error) {
-	// return base publicURL + key
+	// public base URL + key
 	return s.publicURL + "/" + key, nil
 }
 
-// Close menutup koneksi (untuk local storage tidak ada yang perlu ditutup)
+// Close is a no-op for local storage.
 func (s *LocalStore) Close() error {
 	return nil
 }
 
-// GetRoot mengembalikan direktori root storage (untuk static serving)
+// GetRoot returns the storage root directory, useful for static file serving
+// (e.g. gin's router.Static).
 func (s *LocalStore) GetRoot() string {
 	return s.root
 }

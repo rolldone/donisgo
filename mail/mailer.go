@@ -15,17 +15,28 @@ import (
 	txttpl "text/template"
 )
 
+// Mailable describes a message that a Mailer can render and send. TemplateBase
+// is the path prefix of the message templates, without extension: both
+// "<TemplateBase>.html" and "<TemplateBase>.txt" must exist, e.g.
+// "templates/email/confirm".
 type Mailable interface {
 	Subject() string
-	TemplateBase() string // e.g. "templates/email/confirm"
+	TemplateBase() string
 	Data() map[string]interface{}
 	From() (email string, name string)
 }
 
+// Mailer renders Mailable templates and sends them over SMTP. Build one with
+// NewMailer (environment settings) or NewMailerWithConfig (explicit settings,
+// which take precedence over the SMTP_* environment variables).
 type Mailer struct {
+	// FromEmail is the default sender address when a Mailable returns none.
 	FromEmail string
-	FromName  string
-	SMTP      *SMTPConfig // optional DB override
+	// FromName is the default sender display name.
+	FromName string
+	// SMTP holds explicit SMTP settings; when nil the SMTP_* environment
+	// variables are used at send time.
+	SMTP *SMTPConfig
 }
 
 var tplCache = map[string]*template.Template{}
@@ -42,6 +53,9 @@ type mailJob struct {
 	FromName  string
 }
 
+// NewMailer returns a Mailer whose sender identity is read from SMTP_FROM_EMAIL
+// and SMTP_FROM_NAME and whose SMTP connection settings come from the SMTP_*
+// environment variables at send time.
 func NewMailer() *Mailer {
 	return &Mailer{
 		FromEmail: os.Getenv("SMTP_FROM_EMAIL"),
@@ -136,6 +150,8 @@ func (m *Mailer) renderParts(base string, data map[string]interface{}) (htmlPart
 	return htmlBuf.Bytes(), textBuf.Bytes(), nil
 }
 
+// Send renders the mailable and delivers it synchronously, returning any SMTP
+// or template error to the caller.
 func (m *Mailer) Send(toEmail string, mail Mailable) error {
 	htmlPart, textPart, err := m.renderParts(mail.TemplateBase(), mail.Data())
 	if err != nil {

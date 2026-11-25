@@ -18,7 +18,9 @@ type MiddlewareDescriptor struct {
 
 // ServiceDeps groups shared service dependencies passed into plugins.
 type ServiceDeps struct {
-	DB    *gorm.DB
+	// DB is the shared GORM handle.
+	DB *gorm.DB
+	// Store is the shared storage backend.
 	Store storage.Store
 }
 

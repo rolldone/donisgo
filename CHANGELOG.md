@@ -58,6 +58,21 @@ yang tidak kompatibel dapat muncul pada bump **minor**.
   `// Deprecated:`; dipertahankan hingga v1.0 (SPEC-004 D4). Perilaku lama tidak
   berubah.
 
+### Documentation
+
+- **Godoc lengkap untuk 12 paket publik** (`app`, `plugins`,
+  `plugins/plugin_registry`, `db`, `events`, `keydb`, `auth`, `mail`, `storage`,
+  `secrets`, `uuid`, `console`): setiap paket memiliki package doc
+  (`doc.go`, konvensi `Package <name> ...`), seluruh simbol ekspor memiliki doc
+  comment yang diawali nama simbol, dan `app.Config` serta `auth.Config`
+  didokumentasikan per field. Semua dalam bahasa Inggris, siap render di
+  [pkg.go.dev](https://pkg.go.dev/github.com/rolldone/donisgo). (SPEC-005 WO-06)
+- **README dirombak menjadi README versi library** (Inggris): badge *Go
+  Reference* + *MIT*, one-liner, install & pin, contoh `app.New`, tabel peta
+  paket, catatan Ekosistem + serving `pages`, dan bagian versioning/releases.
+- Komentar berbahasa Indonesia pada paket publik (`storage`, `mail`, `keydb`,
+  `db`, `plugins`) diterjemahkan ke Inggris untuk konsistensi godoc.
+
 ### Migration notes
 
 Dari `v0.1.x` ke `v0.2.0`:

@@ -10,15 +10,24 @@ import (
 
 // SMTPConfig holds SMTP connection settings that can override env defaults.
 type SMTPConfig struct {
-	Host        string `json:"host"`
-	Port        string `json:"port"`
-	User        string `json:"user"`
-	Pass        string `json:"pass"`
-	FromEmail   string `json:"from_email"`
-	FromName    string `json:"from_name"`
-	UseTLS      bool   `json:"use_tls"`
-	UseStartTLS bool   `json:"use_starttls"`
-	SkipVerify  bool   `json:"skip_verify"`
+	// Host is the SMTP server hostname.
+	Host string `json:"host"`
+	// Port is the SMTP server port.
+	Port string `json:"port"`
+	// User is the SMTP auth username (empty disables auth).
+	User string `json:"user"`
+	// Pass is the SMTP auth password.
+	Pass string `json:"pass"`
+	// FromEmail is the sender address.
+	FromEmail string `json:"from_email"`
+	// FromName is the sender display name.
+	FromName string `json:"from_name"`
+	// UseTLS dials the server with implicit TLS (SMTPS).
+	UseTLS bool `json:"use_tls"`
+	// UseStartTLS upgrades a plain connection with STARTTLS.
+	UseStartTLS bool `json:"use_starttls"`
+	// SkipVerify disables TLS certificate verification (testing only).
+	SkipVerify bool `json:"skip_verify"`
 }
 
 // Note: using stdlib smtp for now; can swap to github.com/wneessen/go-mail later.
@@ -138,25 +147,32 @@ func SendConfirmEmail(toEmail, toName, confirmLink string) error {
 	return nil
 }
 
-// ConfirmMailable implements Mailable for confirmation emails.
+// ConfirmMailable implements Mailable for account-confirmation emails. Build it
+// through the fields set by SendConfirmEmail, or construct one directly if you
+// need a different subject or template.
 type ConfirmMailable struct {
 	subject      string
 	templateBase string
 	data         map[string]interface{}
 }
 
+// Subject returns the email subject.
 func (c *ConfirmMailable) Subject() string {
 	return c.subject
 }
 
+// TemplateBase returns the template path prefix (without extension).
 func (c *ConfirmMailable) TemplateBase() string {
 	return c.templateBase
 }
 
+// Data returns the template data (name, confirmation link, expiry).
 func (c *ConfirmMailable) Data() map[string]interface{} {
 	return c.data
 }
 
+// From returns an empty sender, so the Mailer falls back to its own
+// FromEmail/FromName.
 func (c *ConfirmMailable) From() (string, string) {
 	return "", ""
 }
