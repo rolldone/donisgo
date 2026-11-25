@@ -90,9 +90,10 @@ go get github.com/rolldone/donisgo
 | secrets | `github.com/rolldone/donisgo/secrets` | `EncryptBlob` / `DecryptBlob` |
 | uuid | `github.com/rolldone/donisgo/uuid` | `uuid.New()` UUIDv7 generator |
 
-Only `internal/console` (CLI tooling) and `internal/pluginloader` (framework
-plugin wiring) remain under `internal/` — they are implementation details, not
-library API.
+Only `internal/pluginloader` (framework plugin wiring) remains under `internal/`
+— it is an implementation detail, not library API. `console` (CLI tooling) became
+importable as `github.com/rolldone/donisgo/console` in v0.1.2, so sibling tooling
+and scaffolded apps can reuse its commands.
 
 **Quickstart: wiring an app**
 
@@ -224,7 +225,7 @@ Main components
 - Database (GORM): `db/gorm.go`
 - Auth utilities (JWT): `auth` (token generation/verification helpers)
 - Plugin system: `internal/pluginloader` and `plugins`
-- CLI / migrations: `internal/console`
+- CLI / migrations: `console`
 - Mailer: `mail`
 - KeyDB/Redis client: `keydb`
 - Storage abstraction: `storage`
@@ -608,7 +609,7 @@ Transactions & context
 - Avoid long-lived DB transactions across user-facing requests; keep transactions short and deterministic.
 
 Migrations
-- SQL/Go migrations live in the `migrations/` directory. Migration helper and CLI integration are available under `internal/console/migrate.go`.
+- SQL/Go migrations live in the `migrations/` directory. Migration helper and CLI integration are available under `console/migrate.go`.
 - Run migrations locally via the console CLI. Example (from repo root):
 
 ```bash
@@ -794,7 +795,7 @@ framework — user TIDAK perlu (dan tidak boleh) mendaftarkannya manual:
   `pluginloader.RegisterLastPlugins()`:
   - Server: dipanggil dari `app/bootstrap.go` (`attachPlugins`)
     SETELAH plugin user didaftarkan.
-  - Console: dipanggil dari `internal/console/root.go` (`Run`).
+  - Console: dipanggil dari `console/root.go` (`Run`).
   Karena ia memegang `router.NoRoute`, urutan terakhir ini WAJIB — semua route
   spesifik (api/admin/health) dari plugin lain harus menang duluan.
   ⚠️ **Plugin ini PATEN — JANGAN dihapus.** Registrasinya otomatis via
@@ -897,7 +898,7 @@ func main() {
 ```go
 import (
    // ... other imports
-   "github.com/rolldone/donisgo/internal/console"
+   "github.com/rolldone/donisgo/console"
    "github.com/rolldone/donisgo/plugins"
    myplugin "github.com/rolldone/donisgo/plugins/my_plugin"  // note: use underscore for import path
 )
@@ -1100,7 +1101,7 @@ Quick file references
 - DB transactions: `db/tx.go`
 - Auth utilities (JWT): `auth/jwt.go`
 - Storage: `storage/config.go`
-- Console commands: `internal/console/`
+- Console commands: `console/`
 - Mailer: `mail/mailer.go`
 - KeyDB client: `keydb/client.go`
 
