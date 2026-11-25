@@ -5,11 +5,10 @@ Semua perubahan penting didokumentasikan di sini. Format mengikuti
 [SemVer](https://semver.org/). Karena donisgo masih di jalur `v0.x`, perubahan
 yang tidak kompatibel dapat muncul pada bump **minor**.
 
-## [0.2.0] — unreleased
+## [0.2.0] — 2026-11-25
 
-> Draft — tanggal & tag ditentukan Manager saat rilis (fase 5). Entri ini
-> menggabungkan de-globalisasi `auth` (SPEC-004 D3) dan pembersihan pure library
-> (SPEC-005 fase 4).
+Entri ini menggabungkan de-globalisasi `auth` (SPEC-004 D3) dan pembersihan
+pure library (SPEC-005 fase 4).
 
 ### Removed (BREAKING)
 
@@ -177,6 +176,7 @@ Dari `v0.1.x` ke `v0.2.0`:
 
 (commit `56af15b`)
 
+[0.2.0]: https://github.com/rolldone/donisgo/compare/v0.1.4...v0.2.0
 [0.1.4]: https://github.com/rolldone/donisgo/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/rolldone/donisgo/releases/tag/v0.1.3
 [0.1.2]: https://github.com/rolldone/donisgo/compare/v0.1.1...v0.1.2

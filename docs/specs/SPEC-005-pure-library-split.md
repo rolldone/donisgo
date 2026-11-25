@@ -123,15 +123,15 @@ Gerbang kualitas tiap fase (kedua repo): `gofmt -l .` kosong, `go vet ./...`,
 
 ## 6. Acceptance Criteria (SPEC ini)
 
-- [ ] donisgo: `go build ./...` hijau tanpa `cmd/` & `plugins/pages`; nol
+- [x] donisgo: `go build ./...` hijau tanpa `cmd/` & `plugins/pages`; nol
       binary; README API-level; CHANGELOG `v0.2.0` memuat BREAKING + catatan
       migrasi.
-- [ ] donisgo-template: gates hijau; `cmd/server` & `cmd/console` jalan;
+- [x] donisgo-template: gates hijau; `cmd/server` & `cmd/console` jalan;
       `plugin new` end-to-end menghasilkan sub-app yang bisa di-build dengan
       donisgo versi pinned.
-- [ ] README kedua repo saling merujuk (peta ekosistem).
-- [ ] Tag: donisgo `v0.2.0`, donisgo-template `v0.1.0`.
-- [ ] LICENSE (MIT) ada di kedua repo.
+- [x] README kedua repo saling merujuk (peta ekosistem).
+- [x] Tag: donisgo `v0.2.0`, donisgo-template `v0.1.0`.
+- [x] LICENSE (MIT) ada di kedua repo.
 
 ## 7. Keputusan Open Questions (disetujui pemilik 2026-11-25)
 
