@@ -5,6 +5,20 @@ Semua perubahan penting didokumentasikan di sini. Format mengikuti
 [SemVer](https://semver.org/). Karena donisgo masih di jalur `v0.x`, perubahan
 yang tidak kompatibel dapat muncul pada bump **minor**.
 
+## [0.1.4] — 2026-11-25
+
+### Fixed
+
+- `plugin new`: scaffold kini memisahkan path modul **framework** dari path
+  modul **aplikasi**. Import paket framework (`plugins`, `events`) selalu
+  memakai `github.com/rolldone/donisgo/...`, sehingga scaffold yang dihasilkan
+  di dalam modul konsumen (mis. `historic_service`) dapat di-build. Sebelumnya
+  seluruh import memakai module path dari `go.mod` CWD, sehingga import
+  framework menjadi `<module-konsumen>/plugins` dan gagal build.
+  Import paket milik aplikasi (`plugins/<id>/handlers`, `.../middleware`,
+  `.../services`) tetap mengikuti module path aplikasi.
+  ([#13](https://github.com/rolldone/donisgo/issues/13))
+
 ## [0.1.3] — 2026-11-25
 
 ### Added
@@ -58,6 +72,8 @@ yang tidak kompatibel dapat muncul pada bump **minor**.
 
 (commit `56af15b`)
 
+[0.1.4]: https://github.com/rolldone/donisgo/compare/v0.1.3...v0.1.4
+[0.1.3]: https://github.com/rolldone/donisgo/releases/tag/v0.1.3
 [0.1.2]: https://github.com/rolldone/donisgo/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/rolldone/donisgo/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/rolldone/donisgo/releases/tag/v0.1.0
