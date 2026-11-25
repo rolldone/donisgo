@@ -3,6 +3,7 @@ package console
 import (
 	"errors"
 	"fmt"
+	goformat "go/format"
 	"os"
 	"path/filepath"
 	"strings"
@@ -92,24 +93,24 @@ var pluginNewCmd = &cobra.Command{
 		switch tmpl {
 		case "minimal":
 			pluginContent = pluginGoTemplateMinimal(mod, pkgName, id, display, !pluginSkipConsole)
-			if err := writeFileIfMissing(filepath.Join(base, "handlers", "health.go"), pluginHandlerTemplate(id)); err != nil {
+			if err := writeGoFileIfMissing(filepath.Join(base, "handlers", "health.go"), pluginHandlerTemplate(id)); err != nil {
 				return err
 			}
 		case "crud":
 			pluginContent = pluginGoTemplateCRUD(mod, pkgName, id, display, !pluginSkipConsole)
-			if err := writeFileIfMissing(filepath.Join(base, "handlers", "resource.go"), pluginCRUDHandlerTemplate(id)); err != nil {
+			if err := writeGoFileIfMissing(filepath.Join(base, "handlers", "resource.go"), pluginCRUDHandlerTemplate(id)); err != nil {
 				return err
 			}
-			if err := writeFileIfMissing(filepath.Join(base, "services", "resource.go"), pluginCRUDServiceTemplate(id)); err != nil {
+			if err := writeGoFileIfMissing(filepath.Join(base, "services", "resource.go"), pluginCRUDServiceTemplate(id)); err != nil {
 				return err
 			}
 		case "middleware":
 			pluginContent = pluginGoTemplateMiddleware(mod, pkgName, id, display, !pluginSkipConsole)
-			if err := writeFileIfMissing(filepath.Join(base, "middleware", "sample.go"), pluginMiddlewareTemplate(id)); err != nil {
+			if err := writeGoFileIfMissing(filepath.Join(base, "middleware", "sample.go"), pluginMiddlewareTemplate(id)); err != nil {
 				return err
 			}
 		}
-		if err := writeFileIfMissing(filepath.Join(base, "plugin.go"), pluginContent); err != nil {
+		if err := writeGoFileIfMissing(filepath.Join(base, "plugin.go"), pluginContent); err != nil {
 			return err
 		}
 		// create initial migration with timestamp prefix
@@ -123,7 +124,7 @@ var pluginNewCmd = &cobra.Command{
 		}
 
 		// example events file showing how to subscribe/publish internal events
-		if err := writeFileIfMissing(filepath.Join(base, "events.go"), pluginEventsTemplate(pkgName, id, mod)); err != nil {
+		if err := writeGoFileIfMissing(filepath.Join(base, "events.go"), pluginEventsTemplate(pkgName, id, mod)); err != nil {
 			return err
 		}
 
@@ -165,10 +166,32 @@ func sanitizePluginID(in string) string {
 }
 
 func writeFileIfMissing(path, content string) error {
+	if err := checkMissing(path); err != nil {
+		return err
+	}
+	return os.WriteFile(path, []byte(content), 0o666)
+}
+
+// writeGoFileIfMissing writes Go source only after running it through
+// go/format so scaffolds are always gofmt-clean regardless of the raw string
+// indentation used by the templates. Invalid Go is rejected, never written.
+func writeGoFileIfMissing(path, content string) error {
+	if err := checkMissing(path); err != nil {
+		return err
+	}
+	src, err := goformat.Source([]byte(content))
+	if err != nil {
+		return fmt.Errorf("format generated Go source for %s: %w", path, err)
+	}
+	return os.WriteFile(path, src, 0o666)
+}
+
+// checkMissing returns an error when path already exists.
+func checkMissing(path string) error {
 	if _, err := os.Stat(path); err == nil {
 		return fmt.Errorf("file already exists: %s", path)
 	}
-	return os.WriteFile(path, []byte(content), 0o666)
+	return nil
 }
 
 // modulePath reads the current module path from go.mod so generated plugin
@@ -232,12 +255,11 @@ func toUpper(r rune) rune {
 func pluginGoTemplateMinimal(mod, pkg, id, display string, includeConsole bool) string {
 	consoleBlock := ""
 	if includeConsole {
-		consoleBlock = fmt.Sprintf(`
-	cmd := &cobra.Command{
+		consoleBlock = fmt.Sprintf(`	cmd := &cobra.Command{
 		Use:   "%s:hello",
 		Short: "hello from %s",
 		Run: func(cmd *cobra.Command, args []string) {
-			cmd.Printf("hello from plugin %s\\n")
+			cmd.Printf("hello from plugin %s\n")
 		},
 	}
 	return []*cobra.Command{cmd}
@@ -284,12 +306,11 @@ func (p *Plugin) ConsoleCommands() []*cobra.Command {
 func pluginGoTemplateCRUD(mod, pkg, id, display string, includeConsole bool) string {
 	consoleBlock := ""
 	if includeConsole {
-		consoleBlock = fmt.Sprintf(`
-	cmd := &cobra.Command{
+		consoleBlock = fmt.Sprintf(`	cmd := &cobra.Command{
 		Use:   "%s:hello",
 		Short: "hello from %s",
 		Run: func(cmd *cobra.Command, args []string) {
-			cmd.Printf("hello from plugin %s\\n")
+			cmd.Printf("hello from plugin %s\n")
 		},
 	}
 	return []*cobra.Command{cmd}
@@ -337,12 +358,11 @@ func (p *Plugin) ConsoleCommands() []*cobra.Command {
 func pluginGoTemplateMiddleware(mod, pkg, id, display string, includeConsole bool) string {
 	consoleBlock := ""
 	if includeConsole {
-		consoleBlock = fmt.Sprintf(`
-	cmd := &cobra.Command{
+		consoleBlock = fmt.Sprintf(`	cmd := &cobra.Command{
 		Use:   "%s:hello",
 		Short: "hello from %s",
 		Run: func(cmd *cobra.Command, args []string) {
-			cmd.Printf("hello from plugin %s\\n")
+			cmd.Printf("hello from plugin %s\n")
 		},
 	}
 	return []*cobra.Command{cmd}
