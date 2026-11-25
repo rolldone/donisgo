@@ -1,102 +1,73 @@
-Donisgo — Architecture & Request Flow
-=====================================
+Donisgo — Go library untuk backend modular
+==========================================
 
 Summary
 -------
-**Donisgo** (formerly `go_framework`) is a modular Go web application framework for backend services. The documentation here explains the architecture, request flow, important environment variables, and how to run development tools (server and console).
+**Donisgo** adalah **library** Go (bukan aplikasi) untuk membangun backend
+modular: koneksi GORM, sistem migrasi, kontrak plugin, event bus, client
+KeyDB/Redis, storage, mailer, dan utilitas JWT. Ia tidak mengirim binary,
+tidak menyajikan halaman, dan tidak melakukan scaffolding aplikasi — semua itu
+ada di repo starter
+[`donisgo-template`](https://github.com/rolldone/donisgo-template).
 
-Table of contents
------------------
-- Overview
-- Quick Start
-- Using donisgo as a library
-- Versioning & releases
-- What's included
-- What's NOT included (implement via plugins)
-- Main components
-- Bootstrapping
-- Request flow
-- Plugin system
-- Environment variables
-- Auth
-  - JWT utilities available
-  - Testing JWT functions
-- DB
-- Console commands overview
-- Migration commands (console)
-- Plugin quickstart (CLI generator)
-- Plugin registration (manual)
+Dokumen ini menjelaskan API library. Untuk quickstart aplikasi (server, CLI,
+`plugin new`, env, deploy) lihat README donisgo-template.
 
-Overview
---------
-- This is a **minimalist, plugin-based Go web framework** for building modular backend services
-- Main binaries: `cmd/server/main.go` (HTTP server) and `cmd/console/main.go` (CLI/migrations)
-- Core philosophy: provide essential infrastructure (DB, routing, plugins) and let you implement features via plugins or custom code
-- **No built-in authentication or user management** - implement via plugins (recommended) or custom middleware
-- Application bootstrap and dependency wiring are in `app/bootstrap.go`
-- Extensible via a plugin system that supports middleware, routes, services, migrations, and console commands
-
-Quick Start
------------
-1. Copy example env and edit values:
-
-```bash
-cp .env.example .env
-# edit .env as needed
-```
-
-2. Run migrations (applies core then plugin migrations):
-
-```bash
-go run ./cmd/console migrate up
-```
-
-3. Start the server:
-
-```bash
-go run ./cmd/server
-```
-
-4. (Optional) Generate a new plugin:
-
-```bash
-go run ./cmd/console plugin new --id my-plugin
-```
-
-The plugin generator creates an initial migration with a timestamp prefix, in the same style as Laravel: `YYYY_MM_DD_HHMMSS_name.up.sql` and `YYYY_MM_DD_HHMMSS_name.down.sql`.
-
-See sections below for more details.
-
-Using donisgo as a library
---------------------------
-Since SPEC-004 the framework's core packages live at the module root, so any Go
-module can import them directly:
-
-```bash
-go get github.com/rolldone/donisgo
-```
-
-**Public packages**
-
-| Package | Import path | What you get |
+Ekosistem
+---------
+| Repo | Peran | Cara konsumsi |
 |---|---|---|
-| app | `github.com/rolldone/donisgo/app` | `app.Config`, `app.New`, `app.NewFromEnv`, `(*App).Run` |
-| plugins | `github.com/rolldone/donisgo/plugins` | `Plugin` contract, `ServiceDeps`, `MiddlewareDescriptor`, `Registry`, priority constants |
-| db | `github.com/rolldone/donisgo/db` | `db.Open(db.Config{...})`, `WithTransaction` |
+| **donisgo** (repo ini) | **Pure library** — paket inti yang bisa diimpor | `go get github.com/rolldone/donisgo@vX.Y.Z`, di-pin di `go.mod` |
+| [`donisgo-template`](https://github.com/rolldone/donisgo-template) | **Starter aplikasi + tooling** — `cmd/server`, `cmd/console`, generator `plugin new`, plugin konten `pages`, skeleton frontend, docs aplikasi & `.env.example` | clone / fork / GitHub *Use this template* |
+
+Aturan batas:
+
+- **Library** berisi kontrak & infrastruktur: `app`, `plugins`, `db`, `auth`,
+  `events`, `keydb`, `storage`, `mail`, `secrets`, `uuid`, `console`.
+- **Starter** berisi wujud aplikasi: binary, scaffold, plugin konten.
+- Sejak `v0.2.0` **serving halaman/SPA tidak lagi otomatis** dilakukan
+  framework. Aplikasi yang butuh serving halaman wajib mendaftarkan plugin
+  `pages` secara eksplisit dari
+  `github.com/rolldone/donisgo-template/plugins/pages` (urutan terakhir via
+  `plugins.Registry.EnsurePluginLast`).
+
+Instalasi & versioning
+----------------------
+donisgo memakai [SemVer](https://semver.org/) dengan tag Git. Selalu pin versi:
+
+```bash
+go get github.com/rolldone/donisgo@v0.2.0
+```
+
+⚠️ Jalur `v0.x`: perubahan yang tidak kompatibel dapat muncul pada bump
+**minor** (`v0.1.x` → `v0.2.0`). Baca [`CHANGELOG.md`](CHANGELOG.md) sebelum naik
+versi. Riwayat rilis: tag GitHub.
+
+Paket publik
+------------
+| Package | Import path | Yang didapat |
+|---|---|---|
+| app | `github.com/rolldone/donisgo/app` | `app.Config`, `app.New`, `app.NewFromEnv`, `(*App).Run`, `GetStore/GetMailer/GetKeyDB/GetRegistry` |
+| plugins | `github.com/rolldone/donisgo/plugins` | Kontrak `Plugin`, `ServiceDeps`, `MiddlewareDescriptor`, `Registry`, konstanta prioritas |
+| db | `github.com/rolldone/donisgo/db` | `db.Open(db.Config{...})`, `db.ConfigFromEnv()`, `WithTransaction` |
 | events | `github.com/rolldone/donisgo/events` | `events.NewBus()` publish/subscribe + request/reply |
-| keydb | `github.com/rolldone/donisgo/keydb` | `keydb.New(cfg)` → `*Client` (flash messages, raw Redis) |
-| storage | `github.com/rolldone/donisgo/storage` | `Store` interface, `Config`, `NewStore` |
+| keydb | `github.com/rolldone/donisgo/keydb` | `keydb.New(cfg)` → `*Client` (flash message, Redis mentah) |
+| storage | `github.com/rolldone/donisgo/storage` | Interface `Store`, `Config`, `NewStore` |
 | mail | `github.com/rolldone/donisgo/mail` | `Mailer`, `Mailable`, `SMTPConfig`, `NewMailerWithConfig` |
-| auth | `github.com/rolldone/donisgo/auth` | JWT sign/parse helpers |
+| auth | `github.com/rolldone/donisgo/auth` | `auth.Config` + `auth.New` (instans), utilitas JWT |
 | secrets | `github.com/rolldone/donisgo/secrets` | `EncryptBlob` / `DecryptBlob` |
-| uuid | `github.com/rolldone/donisgo/uuid` | `uuid.New()` UUIDv7 generator |
+| uuid | `github.com/rolldone/donisgo/uuid` | `uuid.New()` generator UUIDv7 |
+| console | `github.com/rolldone/donisgo/console` | Root CLI cobra + command `migrate` & `seed` (dapat diperluas) |
+| plugins/plugin_registry | `github.com/rolldone/donisgo/plugins/plugin_registry` | Kontrak komunikasi antar-plugin tanpa circular import |
 
-Only `internal/pluginloader` (framework plugin wiring) remains under `internal/`
-— it is an implementation detail, not library API. `console` (CLI tooling) became
-importable as `github.com/rolldone/donisgo/console` in v0.1.2, so sibling tooling
-and scaffolded apps can reuse its commands.
+Tidak ada direktori `internal/`: seluruh paket di atas adalah API yang bisa
+diimpor.
 
-**Quickstart: wiring an app**
+Wiring aplikasi
+---------------
+`app.Config` adalah entrypoint eksplisit dan injectable. Semua field opsional:
+nil berarti "pakai default dari environment", jadi Anda hanya meng-override
+yang perlu.
 
 ```go
 package main
@@ -106,16 +77,18 @@ import (
 
     "github.com/rolldone/donisgo/app"
     "github.com/rolldone/donisgo/plugins"
-    myplugin "github.com/rolldone/donisgo/plugins/my_plugin"
+    myplugin "example.com/myapp/plugins/my_plugin"
 )
 
 func main() {
     application, err := app.New(app.Config{
-        // Every field is optional; nil means "use the env-driven default".
+        // Optional: inject handle yang sudah Anda miliki.
         // DB:    gormDB,      // nil → db.Open(db.ConfigFromEnv())
         // Store: myStore,     // nil → storage.NewStore(storage.LoadConfig())
-        // KeyDB: keydbClient, // nil → keydb.New from KEYDB_* env
+        // KeyDB: keydbClient, // nil → keydb.New dari KEYDB_* env
         // Mail:  mailer,      // nil → mail.NewMailer()
+        // CORS:  &cors.Config{},                 // nil → CORS_ALLOWED_ORIGINS
+        // TrustedProxies: []string{"10.0.0.0/8"}, // nil → TRUSTED_PROXIES; empty → trust none
         Plugins: []plugins.Plugin{myplugin.New()},
     })
     if err != nil {
@@ -125,10 +98,40 @@ func main() {
 }
 ```
 
-`app.NewFromEnv()` is shorthand for `app.New(app.Config{})` when you just want
-the previous environment-driven behaviour.
+Catatan:
 
-**Quickstart: a custom plugin**
+- `Plugins` non-nil → registry **segar dan terisolasi** milik `App` ini.
+  `Plugins` nil → memakai registry default (perilaku transisional agar helper
+  package-level yang deprecated tetap bekerja).
+- `app.NewFromEnv()` adalah gula untuk `app.New(app.Config{})`.
+- `app.Run(app.Options{...})` masih bekerja tetapi **deprecated**.
+- donisgo **tidak** mendaftarkan plugin apa pun secara otomatis. Urutan plugin
+  sepenuhnya milik pemanggil; pakai `Registry.EnsurePluginLast` untuk plugin
+  yang memegang catch-all.
+- Resolusi dependency tersedia via `GetStore()`, `GetMailer()`, `GetKeyDB()`,
+  `GetRegistry()`.
+
+Kontrak plugin
+--------------
+Implementasikan `plugins.Plugin` (`plugins/types.go`):
+
+```go
+type Plugin interface {
+    ID() string
+    RegisterServices(deps ServiceDeps) error
+    RegisterMiddleware() []MiddlewareDescriptor
+    RegisterRoutes(router *gin.Engine, admin *gin.RouterGroup, api *gin.RouterGroup) error
+    Seed() error
+    ConsoleCommands() []*cobra.Command
+}
+```
+
+- `RegisterServices` menerima `ServiceDeps{DB *gorm.DB, Store storage.Store}`.
+- `RegisterMiddleware` mengembalikan descriptor dengan `Target` (`global`,
+  `admin`, `api`) dan `Priority` (lihat `plugins/middleware_priorities.go`).
+- `RegisterRoutes` dipanggil setelah seluruh service teregistrasi.
+
+Contoh plugin minimal:
 
 ```go
 package myplugin
@@ -164,427 +167,186 @@ func (p *Plugin) RegisterRoutes(_ *gin.Engine, admin, _ *gin.RouterGroup) error 
     return nil
 }
 
-func (p *Plugin) Seed() error                     { return nil }
+func (p *Plugin) Seed() error                       { return nil }
 func (p *Plugin) ConsoleCommands() []*cobra.Command { return nil }
 ```
 
-**Quickstart: using packages standalone**
+Untuk membuat plugin baru dengan cepat, gunakan generator `plugin new` di repo
+starter:
+
+```bash
+# di dalam proyek yang dibuat dari donisgo-template
+go run ./cmd/console plugin new --id my-plugin --template minimal|crud|middleware
+```
+
+Plugin Registry (komunikasi antar-plugin)
+-----------------------------------------
+`plugins/plugin_registry` menyediakan berbagi interface antar-plugin tanpa
+circular import:
+
+1. Definisikan interface contract di `plugins/plugin_registry/registry.go`.
+2. Plugin **PROVIDER** mendaftarkan implementasinya via `Register<X>Provider(...)`
+   di `RegisterServices(deps)`.
+3. Plugin **CONSUMER** memanggil delegation function.
+4. Keduanya hanya mengimpor `plugin_registry`.
+5. Setiap delegation function punya nil-guard: tanpa provider, kembalikan
+   default aman (bukan panic).
+
+Panduan menambah contract + contoh `EchoProvider` ada di komentar
+`plugins/plugin_registry/registry.go`; error bersama di `errors.go`
+(dideteksi via `errors.As`).
+
+Registry & urutan plugin
+------------------------
+- `plugins.NewRegistry()` membuat registry terisolasi; wrapper package-level
+  (`RegisterPlugins`, `EnsurePluginLast`, dst.) **deprecated** dan dipertahankan
+  hingga v1.0.
+- `EnsurePluginLast(p)` mendaftarkan `p` di akhir, memindahkan entri lama
+  dengan ID sama (idempotent, dedup). Pakai untuk plugin yang memegang
+  `router.NoRoute` — mis. plugin `pages` dari starter — agar route spesifik
+  (api/admin/health) menang lebih dulu:
 
 ```go
-// Event bus — instance scoped, no globals.
-bus := events.NewBus()
-stop := bus.Subscribe("user.created", func(ctx context.Context, payload interface{}) {
-    log.Printf("payload: %v", payload)
-})
-defer stop()
-bus.Publish("user.created", "user-42")
-
-// UUIDv7 — time ordered.
-id, err := uuid.New()
-
-// Database handle you own.
-gdb, err := db.Open(db.Config{Driver: "postgres", DSN: os.Getenv("DATABASE_URL")})
+reg := plugins.NewRegistry()
+reg.RegisterPlugins([]plugins.Plugin{myplugin.New()})
+reg.EnsurePluginLast(pagesplugin.New()) // catch-all selalu terakhir
 ```
-
-A complete, buildable consumer lives in
-[`examples/library/`](examples/library) — its own `go.mod` with a
-`replace github.com/rolldone/donisgo => ../..`. Build it with:
-
-```bash
-cd examples/library && go build ./...
-```
-
-Versioning & releases
----------------------
-donisgo memakai [SemVer](https://semver.org/) dengan tag Git di
-`github.com/rolldone/donisgo`. Selalu pin versi secara eksplisit:
-
-```bash
-go get github.com/rolldone/donisgo@v0.1.2
-```
-
-⚠️ Rilis masih di jalur `v0.x`: perubahan yang tidak kompatibel dapat muncul pada
-bump **minor** (`v0.1.x` → `v0.2.0`), jadi baca catatan rilis sebelum naik versi.
-Riwayat lengkap ada di [`CHANGELOG.md`](CHANGELOG.md); tag yang tersedia:
-`v0.1.0`, `v0.1.1`, `v0.1.2` (lihat GitHub Releases/tags).
-
-What's included
----------------
-✅ Database connectivity (GORM - PostgreSQL, MySQL, MariaDB)  
-✅ Database migrations system  
-✅ Plugin architecture (middleware, routes, services, migrations, console commands)  
-✅ Plugin generator CLI (`plugin new`)  
-✅ JWT utilities (token generation/verification)  
-✅ CORS configuration  
-✅ Console commands (migrations, plugin generator, user management stub)  
-✅ KeyDB/Redis client (for flash messages)  
-✅ Mailer utilities  
-✅ Transaction helpers  
-✅ Swagger documentation support  
-
-What's NOT included (implement via plugins)
---------------------------------------------
-❌ Authentication service & middleware  
-❌ User/Admin models  
-❌ Authorization/permissions system  
-❌ Built-in CRUD endpoints  
-❌ Session management  
-❌ Password hashing/verification utilities  
-
-**Recommended:** Create an `auth` plugin using the plugin generator to implement authentication features.
-
-Main components
----------------
-- Bootstrap & wiring: `app/bootstrap.go`
-- Database (GORM): `db/gorm.go`
-- Auth utilities (JWT): `auth` (token generation/verification helpers)
-- Plugin system: `internal/pluginloader` and `plugins`
-- CLI / migrations: `console`
-- Mailer: `mail`
-- KeyDB/Redis client: `keydb`
-- Storage abstraction: `storage`
-- Events: `events`
-- UUID v7 generator: `uuid`
 
 Events
 ------
-A lightweight internal event bus is provided by `events`. Handlers are invoked asynchronously in separate goroutines by default. Use `Subscribe` to register a handler (it returns an unsubscribe function) and `Publish` to emit events.
-
-Example:
+Bus event internal disediakan `events`. Handler dijalankan asinkron di goroutine
+terpisah secara default. `Subscribe` mengembalikan fungsi unsubscribe;
+`Publish` mengirim event.
 
 ```go
-// subscribe to an event
 unsub := events.Subscribe("user.created", func(ctx context.Context, payload interface{}) {
-   // handle event (payload can be any value)
-   // run quick background work or forward to worker queues
+   // tangani event
 })
 defer unsub()
 
-// publish an event (delivered asynchronously to subscribers)
 events.Publish("user.created", map[string]interface{}{"id": "user123"})
 ```
 
-See `events/events_example_test.go` for a runnable test demonstrating Subscribe/Publish.
+Lihat `events/events_example_test.go` untuk contoh runnable.
 
-Request–Reply (safe pattern)
----------------------------
-For synchronous data-sync between plugins the repo provides a helper `RequestReply` in `events`.
-It creates a unique reply topic for each request, publishes the request with a `ReplyTo` field, and waits (with timeout) for a single reply.
+Request–Reply (pola aman)
+-------------------------
+`events.RequestReply` membuat topik balasan unik per request, mem-publish
+request dengan field `ReplyTo`, dan menunggu satu balasan dengan timeout.
 
-Key properties:
-- Uses a per-request reply topic (no shared global reply channel) to avoid cross-talk.
-- Caller supplies a timeout and context for cancellation.
-- Subscribers must read `ReplyTo` from the request and publish their response to that topic.
+- Topik balasan per-request (tanpa kanal balasan global) → tidak ada cross-talk.
+- Pemanggil memberi timeout dan context untuk pembatalan.
+- Subscriber membaca `ReplyTo` dari request dan mem-publish balasan ke topik itu.
 
-See `events/request_reply.go` and `events/request_reply_test.go` for a concrete example with concurrent requesters.
-
-Cancellation / Deadline pattern
--------------------------------
-When requesters use different timeouts, handlers may finish after some callers already timed out. To avoid leaking or processing stale replies:
-
-- Include a deadline or cancel field in the request payload (e.g. `Deadline` as a Unix nano timestamp) because `Publish` invokes handlers with a background context.
-- Subscribers should check the deadline before doing expensive work and before publishing a reply; if the deadline passed, skip replying.
-- Always publish replies to the specific `ReplyTo` topic provided in the request so replies don't reach other requesters.
-
-Example (publisher):
+Contoh (publisher):
 
 ```go
 deadline := time.Now().Add(2 * time.Second).UnixNano()
-req := map[string]interface{}{ "id": "42", "Deadline": deadline }
+req := map[string]interface{}{"id": "42", "Deadline": deadline}
 resp, err := events.RequestReply(ctx, "user.query", req, 2*time.Second)
 ```
 
-Example (subscriber):
+Contoh (subscriber):
 
 ```go
 events.Subscribe("user.query", func(ctx context.Context, payload interface{}) {
    m, _ := payload.(map[string]interface{})
-   // read deadline (type assertions may vary)
-   if d, ok := m["Deadline"].(int64); ok {
-      if time.Now().UnixNano() > d {
-         // too late, skip
-         return
-      }
+   if d, ok := m["Deadline"].(int64); ok && time.Now().UnixNano() > d {
+      return // terlalu telat, lewati
    }
    replyTo, _ := m["ReplyTo"].(string)
-   // do work and publish to replyTo
+   // kerjakan lalu publish hasil ke replyTo
    events.Publish(replyTo, map[string]interface{}{"ok": true})
 })
 ```
 
-This pattern keeps reply scopes isolated and makes late replies harmless (they're ignored by the requester). If you need true cancellation of work, consider changing the publish API to forward a cancellable context or use a direct service call.
+Auth (JWT)
+----------
+donisgo menyediakan utilitas JWT tanpa layanan autentikasi atau middleware
+bawaan. Implementasikan autentikasi sebagai plugin.
 
-Environment variables
----------------------
-Configuration is read from environment variables. Use `./.env.example` as a starting point.
+### Instans (disarankan)
 
-Below are recommended variables with example values and short notes.
+`auth/config.go` menyediakan `auth.Config` + `auth.New(cfg) (*Auth, error)`.
+Instance independen: dua instance dengan secret berbeda tidak dapat
+memverifikasi token satu sama lain. Secret kosong → **error** (tidak ada
+default insecure). TTL nol → default 10m/14d/1h.
 
-App
-- `APP_ENV`=development|staging|production — runtime environment, affects logging and error modes.
-- `APP_HOST`=0.0.0.0
-- `APP_PORT`=8080
-- `APP_DEBUG`=true|false — enable verbose debug logs only in non-production.
-
-Database (GORM)
-- `DB_TYPE`=postgres|mysql|mariadb
-- `DB_HOST`=localhost
-- `DB_PORT`=5432
-- `DB_NAME`=app_db
-- `DB_USER`=postgres
-- `DB_PASSWORD`=secret — do NOT commit secrets; use secret manager in production.
-- `DB_SSLMODE`=disable|require (Postgres only)
-- `DB_MAX_OPEN_CONNS`=50
-- `DB_MAX_IDLE_CONNS`=10
-- `DB_CONN_MAX_LIFETIME_SEC`=300 — connection max lifetime in seconds
-
-Auth / Security
-- `AUTH_JWT_SECRET`=very_long_random_string — canonical secret used to sign JWTs (HS256). Keep secret and rotate periodically.
-- `JWT_ACCESS_EXP_SECONDS`=900 — access token TTL in seconds (15 minutes recommended)
-- `JWT_REFRESH_EXP_SECONDS`=1209600 — refresh token TTL in seconds (14 days recommended)
-
-Note: legacy env names such as `JWT_SECRET`, `JWT_ACCESS_SECRET`, and `JWT_REFRESH_SECRET` are deprecated. The application will prefer `AUTH_JWT_SECRET` when present and fall back to legacy names for compatibility. Remove legacy vars from production `.env` to avoid confusion.
-
-Mailer
-- `SMTP_HOST`=smtp.example.com
-- `SMTP_PORT`=587
-- `SMTP_USER`=
-- `SMTP_PASS`=
-- `SMTP_FROM`=admin@example.com
-- `SMTP_USE_TLS`=true|false — enable TLS when supported by SMTP server.
-- `SMTP_STARTTLS`=true|false — enable STARTTLS
-
-Cache / Flash Messages (KeyDB/Redis)
-- `KEYDB_HOST`=127.0.0.1
-- `KEYDB_PORT`=6379
-- `KEYDB_PASS`= — optional password
-- `KEYDB_DB`=0 — database number
-
-Storage
-- `STORAGE_DRIVER`=local|s3
-- `STORAGE_ROOT`=./storage — used when `STORAGE_DRIVER=local`
-- `STORAGE_PUBLIC_URL`=http://localhost:8080/assets
-- `S3_BUCKET`, `S3_REGION`, `S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` — used when `STORAGE_DRIVER=s3`
-
-Creating the public storage URL
--------------------------------
-When serving files (images, product assets, business assets) the application exposes public URLs that point to the storage location. Configure `STORAGE_PUBLIC_URL` so generated links (e.g. in APIs and emails) resolve correctly.
-
-Guidelines:
-- Local storage: when `STORAGE_DRIVER=local` and a plugin serves `/assets` via static routes (see "Serving local storage from a plugin" below), set `STORAGE_PUBLIC_URL` to your server base + `/assets`, e.g. `http://localhost:8080/assets` or `https://example.com/assets`.
-- S3 (or other object storage): set `STORAGE_PUBLIC_URL` to the public bucket endpoint or CDN fronting the bucket, e.g. `https://my-bucket.s3.eu-west-1.amazonaws.com` or `https://cdn.example.com`.
-- Trailing slash: avoid a trailing slash to keep URL joins predictable (the code appends paths like `/products/...`).
-
-Examples:
-- Local development (app serves `/assets`):
-
-   STORAGE_DRIVER=local
-   STORAGE_ROOT=./storage
-   STORAGE_PUBLIC_URL=http://localhost:8080/assets
-   
-   See the example snippet in this document: [Serving local storage from a plugin](#serving-local-storage-from-a-plugin)
-
-- S3 with CDN (recommended for production):
-
-   STORAGE_DRIVER=s3
-   S3_BUCKET=my-bucket
-   S3_REGION=eu-west-1
-   S3_ENDPOINT=
-   STORAGE_PUBLIC_URL=https://cdn.example.com
-
-Deployment tips:
-- If you front storage with Nginx or a CDN, point `STORAGE_PUBLIC_URL` to the public host and configure the reverse proxy to serve the files from the application or the object store.
-- Make sure CORS and caching headers are configured correctly on the public host or CDN to allow your frontend origins to request assets.
-- When using local storage in production, prefer a CDN or public bucket for scalability and to offload traffic from the app server.
-
-
-CORS
-- `CORS_ALLOWED_ORIGINS`="http://localhost:5173,http://localhost:4321" — comma-separated list of allowed origins
-
-Trusted proxies (ClientIP)
-- `TRUSTED_PROXIES`="10.0.0.0/8,172.16.0.5" — comma-separated list of IPs/CIDRs allowed to set `X-Forwarded-For` / `X-Real-IP`; gin uses them to resolve `ClientIP()`.
-- **Empty (default) = trust no proxy**: forwarded headers are ignored and `ClientIP()` returns the socket peer. This is the safe default — gin's own default ("trust every proxy") let any client spoof its IP (issue #3).
-- **Required when running behind a reverse proxy** (nginx, caddy, traefik, NPM). If unset there, `ClientIP()` reports the proxy's address instead of the real client, so IP-based rate limits and audit logs are useless.
-- Invalid entries are rejected with a `[WARNING]` log line and the whole list falls back to trust-none; startup never fails because of this variable.
-- Programmatic override: `app.Config.TrustedProxies` wins over the env var (`nil` → env, explicit empty → trust none).
-
-Logging
-- `LOG_LEVEL`=debug|info|warn|error
-
-Misc
-- `APP_URL`=http://localhost:3651
-- `ADMIN_URL`=http://localhost:5173
-- `FRONT_URL`=http://localhost:4321
-- `DOCKER_HOST_IP`=127.0.0.1
-
-Security notes
-- Never commit `.env` with real secrets to version control; keep `.env.example` generic.
-- For production, prefer secret stores (Vault, AWS Secrets Manager, Kubernetes Secrets) and inject at deploy time.
-- Rotate keys/secrets and use minimal privilege for DB/service accounts.
-
-Auth
-----
-This framework provides JWT utilities but does not include built-in authentication services or middleware. Authentication should be implemented via plugins or custom code.
-
-JWT utilities available (`auth`)
------------------------------------------
-
-**Recommended: an explicit instance** (`auth/config.go`, `auth/jwt.go`) —
-build an `*Auth` from `auth.Config` and use its methods. Instances are
-independent, so two of them with different secrets never verify each other's
-tokens:
 ```go
 a, err := auth.New(auth.Config{
     AccessSecret:  os.Getenv("AUTH_ACCESS_SECRET"),
     RefreshSecret: os.Getenv("AUTH_REFRESH_SECRET"),
     ResetSecret:   os.Getenv("AUTH_RESET_SECRET"),
-    // Lifetimes are optional; zero values use the defaults (10m / 14d / 1h).
+    // Opsional; nol → default (10m / 14d / 1h).
     AccessTTL:  15 * time.Minute,
     RefreshTTL: 14 * 24 * time.Hour,
     ResetTTL:   time.Hour,
 })
 if err != nil {
-    log.Fatal(err) // a missing secret is an error, never a silent insecure default
+    log.Fatal(err)
 }
 
-// Generate tokens
-token, err := a.SignAccessToken(userID)       // Generate access token
-refresh, err := a.SignRefreshToken(userID)    // Generate refresh token
+token, err := a.SignAccessToken(userID)       // access token
+refresh, err := a.SignRefreshToken(userID)    // refresh token
+userID, err := a.ParseAccessToken(tokenStr)   // verifikasi access token
+userID, err := a.ParseRefreshToken(tokenStr)  // verifikasi refresh token
 
-// Parse/verify tokens
-userID, err := a.ParseAccessToken(tokenStr)   // Verify access token, returns user ID
-userID, err := a.ParseRefreshToken(tokenStr)  // Verify refresh token, returns user ID
-
-// Get token expiry settings
-accessExp := a.AccessExpirySeconds()   // e.g., 900 (15 minutes)
-refreshExp := a.RefreshExpirySeconds() // e.g., 1209600 (14 days)
+accessExp := a.AccessExpirySeconds()   // mis. 900
+refreshExp := a.RefreshExpirySeconds() // mis. 1209600
 ```
 
-Prefer explicit secrets. If you must keep reading the environment, `auth.ConfigFromEnv()`
-maps the legacy variables (`AUTH_JWT_SECRET` first, then `JWT_ACCESS_SECRET` /
-`JWT_REFRESH_SECRET` / `JWT_RESET_SECRET`, plus the `JWT_*_EXP_SECONDS`
-lifetimes) into a `Config` you can pass to `auth.New`.
+`auth.ConfigFromEnv()` memetakan variabel lingkungan lama (`AUTH_JWT_SECRET`
+lebih dulu, lalu `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` / `JWT_RESET_SECRET`,
+plus `JWT_*_EXP_SECONDS`) menjadi `Config` untuk `auth.New`.
 
-**Deprecated: package-level helpers.** The old package-level API still works —
-it forwards to an instance built from the environment at startup — but it is
-deprecated and will be removed at v1.0:
+### Deprecated: helper package-level
+
+API package-level lama masih bekerja — ia meneruskan ke instance yang dibangun
+dari environment saat startup — tetapi **deprecated** dan akan dihapus di v1.0:
+
 ```go
-// Deprecated: use an *Auth instance instead.
+// Deprecated: gunakan instance *Auth.
 token, err := auth.SignAccessToken(userID)
 userID, err := auth.ParseAccessToken(tokenStr)
 exp := auth.AccessExpirySeconds()
 ```
 
-**Advanced JWT with custom claims** (`auth/claims_tokens.go`):
+### Klaim kustom
+
 ```go
-// Generate token with admin_id and level claims
-token, expTime, err := a.GenerateAccessTokenWithLevel(
-    adminID,
-    "admin",  // level: "admin", "user", etc.
-    15 * time.Minute,
-)
-
-// Parse token and get claims
-claims, err := a.ParseAccessTokenClaims(tokenStr)
-if err == nil {
-    adminID := claims.AdminID
-    level := claims.Level
-    exp := claims.ExpiresAt
-}
-```
-The package-level `auth.GenerateAccessTokenWithLevel` / `auth.ParseAccessTokenClaims`
-are deprecated in the same way as the functions above.
-
-**Opaque refresh tokens** (non-JWT, for database storage):
-```go
-// Generate opaque token (96 random hex chars)
-plainToken, hashedToken, err := auth.GenerateOpaqueRefreshToken()
-// Store hashedToken in DB, return plainToken to client
-
-// Verify opaque token
-receivedHash := auth.HashOpaqueToken(plainTokenFromClient)
-// Compare receivedHash with hash stored in DB
+token, expTime, err := a.GenerateAccessTokenWithLevel(adminID, "admin", 15*time.Minute)
+claims, err := a.ParseAccessTokenClaims(tokenStr) // claims.AdminID, claims.Level
 ```
 
-Implementation notes:
-- The framework does NOT include built-in auth middleware or user/admin models
-- **JWT functions are STATELESS and database-agnostic** - they only encode/decode data into/from token strings
-- JWT tokens do NOT interact with database - you query the database separately using the ID from the token
-- Column names and table structure are completely up to you - JWT only returns the data you encoded (userID, adminID, etc.)
-- Implement authentication in a plugin (recommended) or in your own services
-- Use the JWT utilities in `auth` for token generation and verification
-- Design your own middleware to validate tokens and inject user identity into `context.Context`
-- Pass `context.Context` to service methods to propagate request identity
+### Opaque refresh token (non-JWT, untuk disimpan di DB)
 
-**Example workflow:**
 ```go
-// 1. Login handler - user provides credentials
-func LoginHandler(c *gin.Context) {
-    // Verify credentials from YOUR database (any table structure)
-    var user YourUserModel  // Could be "users", "admins", "accounts", etc.
-    db.Where("email = ?", email).First(&user) // YOUR column names
-    
-    // Verify password (use your own hash method)
-    if !verifyPassword(user.Password, providedPassword) {
-        c.JSON(401, gin.H{"error": "invalid credentials"})
-        return
-    }
-    
-    // Generate JWT with the user ID (from YOUR database)
-    token, _ := auth.SignAccessToken(user.ID)  // Just needs an ID string
-    
-    c.JSON(200, gin.H{"token": token})
-}
-
-// 2. Protected handler - verify token and get user
-func ProtectedHandler(c *gin.Context) {
-    tokenStr := c.GetHeader("Authorization") // "Bearer xxx"
-    
-    // Parse token - returns the ID you encoded earlier
-    userID, err := auth.ParseAccessToken(tokenStr)
-    if err != nil {
-        c.JSON(401, gin.H{"error": "invalid token"})
-        return
-    }
-    
-    // Query YOUR database with YOUR schema
-    var user YourUserModel
-    db.First(&user, "id = ?", userID)  // Use whatever column name you have
-    
-    c.JSON(200, gin.H{"user": user})
-}
+plainToken, hashedToken, err := auth.GenerateOpaqueRefreshToken() // 96 hex char acak
+// simpan hashedToken di DB, kirim plainToken ke klien
+receivedHash := auth.HashOpaqueToken(plainTokenFromClient) // bandingkan dengan DB
 ```
 
-**Key point:** JWT is just a container for data. The actual database queries, column names, and table structures are entirely your responsibility.
+### Catatan implementasi
 
-Security recommendations
-- Keep `AUTH_JWT_SECRET` (or legacy `JWT_SECRET`) out of source control; use environment injection or secret managers.
-- Use short `JWT_ACCESS_EXP_SECONDS` values for access tokens (recommended: 900 seconds / 15 minutes) and longer `JWT_REFRESH_EXP_SECONDS` for refresh tokens.
-- Always serve authentication endpoints over HTTPS; set cookie flags `Secure`, `HttpOnly`, and `SameSite` when using cookies.
-- Rotate signing keys and provide a migration/rotation plan (support key identifiers (`kid`) in tokens if you add multiple keys).
+- Tanpa middleware auth / model user bawaan.
+- Fungsi JWT **stateless dan agnostik DB**: hanya encode/decode data ke string
+  token; query DB dilakukan terpisah memakai ID dari token.
+- Nama kolom & struktur tabel sepenuhnya milik aplikasi.
+- Rancang middleware sendiri untuk memvalidasi token dan menyuntikkan identitas
+  ke `context.Context`.
 
-Example: implementing auth in a plugin
-- Create an auth plugin using `go run ./cmd/console plugin new --id auth`
-- Add user/admin models in the plugin
-- Implement login/register handlers and services
-- Create auth middleware that validates tokens and injects user ID into context
-- Register the middleware with appropriate priority in the plugin's `RegisterMiddleware()` method
+### Rekomendasi keamanan
 
-Testing JWT functions
-----------------------
-You can test JWT functions directly in your code or tests:
+- Jangan commit secret; pakai secret manager.
+- Access token pendek (`JWT_ACCESS_EXP_SECONDS` ~900), refresh token lebih
+  panjang (`JWT_REFRESH_EXP_SECONDS` ~1209600).
+- Selalu HTTPS; bila memakai cookie set `Secure`, `HttpOnly`, `SameSite`.
+- Rotasi signing key; pertimbangkan `kid` bila memakai beberapa key.
+
+### Testing
 
 ```go
-package mytest
-
-import (
-    "testing"
-    "time"
-    "github.com/rolldone/donisgo/auth"
-)
-
 func TestJWT(t *testing.T) {
-    // Build an explicit instance; no environment needed.
     a, err := auth.New(auth.Config{
         AccessSecret:  "test-access-secret",
         RefreshSecret: "test-refresh-secret",
@@ -593,604 +355,254 @@ func TestJWT(t *testing.T) {
     if err != nil {
         t.Fatalf("auth.New: %v", err)
     }
-    
-    userID := "user123"
-    
-    // Generate access token
-    token, err := a.SignAccessToken(userID)
+    token, err := a.SignAccessToken("user123")
     if err != nil {
-        t.Fatalf("failed to sign token: %v", err)
+        t.Fatalf("sign: %v", err)
     }
-    
-    // Verify access token
-    parsedID, err := a.ParseAccessToken(token)
-    if err != nil {
-        t.Fatalf("failed to parse token: %v", err)
-    }
-    
-    if parsedID != userID {
-        t.Errorf("expected %s, got %s", userID, parsedID)
-    }
-}
-
-func TestJWTWithClaims(t *testing.T) {
-    a, err := auth.New(auth.Config{
-        AccessSecret:  "test-access-secret",
-        RefreshSecret: "test-refresh-secret",
-        ResetSecret:   "test-reset-secret",
-    })
-    if err != nil {
-        t.Fatalf("auth.New: %v", err)
-    }
-    
-    // Generate token with custom claims
-    token, _, err := a.GenerateAccessTokenWithLevel("admin123", "admin", 15*time.Minute)
-    if err != nil {
-        t.Fatal(err)
-    }
-    
-    // Parse and verify claims
-    claims, err := a.ParseAccessTokenClaims(token)
-    if err != nil {
-        t.Fatal(err)
-    }
-    
-    if claims.AdminID != "admin123" {
-        t.Errorf("expected admin123, got %s", claims.AdminID)
-    }
-    if claims.Level != "admin" {
-        t.Errorf("expected admin, got %s", claims.Level)
+    got, err := a.ParseAccessToken(token)
+    if err != nil || got != "user123" {
+        t.Fatalf("parse = (%q, %v)", got, err)
     }
 }
 ```
 
-Testing
-- Unit-test auth-related logic by mocking token generation/verification helpers. Look at `mail/mail_test.go` for examples of structure and patterns.
+DB (GORM)
+---------
+GORM adalah ORM utama (`db/`).
 
-DB
---
-This project uses GORM (see `db/gorm.go`) as the primary ORM. Below are connection, pooling, and migration notes to help setup and operate the database safely.
+### Koneksi
 
-Connection
-- DSN is composed from environment variables (`DB_TYPE`, `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_SSLMODE`). Example Postgres DSN format:
+- DSN dibangun dari `DB_TYPE`, `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`,
+  `DB_NAME`, `DB_SSLMODE`.
+- `db.Open(db.Config{...})` menerima handle eksplisit; `db.ConfigFromEnv()`
+  memakai environment. Inject `*gorm.DB` ke service — jangan pakai variabel
+  global.
 
-```text
-host=localhost port=5432 user=postgres dbname=app_db password=secret sslmode=disable
-```
+### Pooling
 
-- The connection is created in `db/gorm.go`; prefer injecting the DB instance into services rather than using a global variable.
- - Transaction helper: see `db/tx.go` for `WithTransaction(ctx, gdb, fn)` which simplifies begin/commit/rollback patterns.
+- `DB_MAX_OPEN_CONNS`, `DB_MAX_IDLE_CONNS`, `DB_CONN_MAX_LIFETIME_SEC`.
 
-Pooling & tuning
-- Recommended env vars: `DB_MAX_OPEN_CONNS`, `DB_MAX_IDLE_CONNS`, `DB_CONN_MAX_LIFETIME_SEC`. Tune based on workload and connection limits of your DB server.
-- Monitor `pg_stat_activity` (Postgres) or equivalent to avoid connection exhaustion when scaling workers or background jobs.
+### Transaksi & context
 
-Transactions & context
-- Pass `context.Context` and, when needed, a `*gorm.DB` transaction instance from handlers into service functions so operations can participate in the same transaction.
-- Avoid long-lived DB transactions across user-facing requests; keep transactions short and deterministic.
-
-Migrations
-- SQL/Go migrations live in the `migrations/` directory (created on demand by `go run ./cmd/console migrate make <name>`; not shipped in the repo). Migration helper and CLI integration are available under `console/migrate.go`.
-- Run migrations locally via the console CLI. Example (from repo root):
-
-```bash
-go run ./cmd/console migrate
-```
-
-- Note: GORM's `AutoMigrate` can be useful for development but use structured migrations for production (reason: safer, reversible, explicit schema control).
-
-Backup & maintenance
-- Regularly backup the DB and test restores. Use read replicas for analytics/reporting to reduce load on primary.
-- Apply schema changes during maintenance windows for high-traffic production systems.
-
-Console commands overview
---------------------------
-The console (`cmd/console`) provides several commands for development and operations:
-
-```bash
-# Show all available commands
-go run ./cmd/console --help
-
-# Database migrations
-go run ./cmd/console migrate [make|up|down|down-all|list]
-
-# Plugin generator
-go run ./cmd/console plugin new --id <plugin-id> [--template minimal|crud|middleware]
-
-# Seed data
-go run ./cmd/console seed [--plugin core|all|<plugin-id>]
-
-# User management (if implemented)
-go run ./cmd/console user [create|list|update|delete|get]
-```
-
-See sections below for detailed usage of each command.
-
-Migration commands (console)
-----------------------------
-Migrations are managed via the console CLI exposed in `cmd/console`. Migration files live under `migrations/{db_type}` for core and `plugins/{plugin_id}/migrations/{db_type}` for plugins (where {db_type} is postgres, mysql, etc.).
-
-Common commands (run from repo root):
-
-```bash
-# create a new migration pair (up/down) for core (or use --plugin <id>)
-# files are timestamped automatically, e.g. 2026_05_03_150401_add_users_table.up.sql
-go run ./cmd/console migrate make add_users_table
-
-# apply pending migrations (core then plugins)
-go run ./cmd/console migrate up
-
-# apply pending migrations only for a specific plugin
-go run ./cmd/console migrate --plugin myplugin up
-
-# rollback the last migration (plugins rolled back last)
-go run ./cmd/console migrate down
-
-# rollback all migrations (plugins first, then core)
-go run ./cmd/console migrate down-all
-
-# show migration status per target
-go run ./cmd/console migrate list
-
-# override auto-detected DB type (useful for testing)
-go run ./cmd/console migrate --db mysql up
-```
-
-Notes:
-- The migrate commands track state in DB tables `migrations` and `migration_targets` created automatically on first run.
-- Migration files use a Laravel-style UTC timestamp prefix to keep ordering deterministic across plugins and environments.
-- If a target is reported as `dirty`, the CLI will refuse to continue; inspect the DB and migration files to resolve the issue (restore missing migration files or fix the database records), then clear `dirty` in `migration_targets`.
-- For production, prefer writing explicit SQL migration files and testing rollbacks on staging before applying to production.
-
-Transactions & context patterns
--------------------------------
-This project uses GORM (`*gorm.DB`) as the shared database dependency and passes it to plugins through `plugins.ServiceDeps`. For file/object storage access, plugins also receive `storage.Store` from the same dependencies.
-
-When you need transactional consistency across multiple service calls, prefer starting a transaction at the HTTP handler boundary and pass the transaction (`*gorm.DB`) explicitly into service methods. Also propagate the request `context.Context` into DB operations so cancellations/deadlines are honored.
-
-Recommended handler pattern (Gin example):
+- Teruskan `context.Context` dan, bila perlu, `*gorm.DB` transaksi dari handler
+  ke service; gunakan `db.WithContext(ctx)`.
+- Hindari transaksi panjang di jalur request user.
 
 ```go
-func CreateItemHandler(c *gin.Context) {
-   ctx := c.Request.Context()
-   gdb := deps.DB
-
-   // start transaction
-   tx := gdb.Begin()
-   if tx.Error != nil {
-      c.JSON(500, gin.H{"error": "failed to start tx"})
-      return
-   }
-
-   // ensure rollback on panic or early return
-   committed := false
-   defer func() {
-      if !committed {
-         tx.Rollback()
-      }
-   }()
-
-   // pass tx (with context) into service layer
-   tx = tx.WithContext(ctx)
-   if err := yourService.CreateItem(ctx, tx, req); err != nil {
-      c.JSON(400, gin.H{"error": err.Error()})
-      return
-   }
-
-   if err := tx.Commit().Error; err != nil {
-      c.JSON(500, gin.H{"error": "failed to commit"})
-      return
-   }
-   committed = true
-   c.Status(201)
-}
-```
-
-Service method signature example (accept tx explicitly):
-
-```go
-func (s *YourService) CreateItem(ctx context.Context, db *gorm.DB, req *CreateItemReq) error {
-   // use db (transaction) which already has ctx via db = db.WithContext(ctx)
-   if err := db.Create(&item).Error; err != nil {
-      return err
-   }
-   // call other DB ops using the same `db` to participate in the transaction
-   return nil
-}
-```
-
-Notes & best practices
-- Prefer passing `*gorm.DB` explicitly rather than storing ephemeral transactions in global state.
-- Use `db.WithContext(ctx)` so query cancellation and timeouts propagate.
-- Keep transactions short: perform only necessary DB work inside a transaction to avoid locking contention.
-- Handle panics and ensure `Rollback()` is called unless `Commit()` succeeded.
-- For read-only handlers that do not need transactions, use the shared DB dependency directly (for example `deps.DB`) without `Begin()`.
-Helper utility
-- `db/tx.go` exposes `WithTransaction(ctx, gdb, fn)` which wraps begin/commit/rollback and panic handling. Use it to simplify handlers:
-
-```go
-err := db.WithTransaction(ctx, deps.DB, func(tx *gorm.DB) error {
-   if err := yourService.CreateItem(ctx, tx, req); err != nil {
-      return err
-   }
-   // other DB ops using tx...
-   return nil
+err := db.WithTransaction(ctx, gdb, func(tx *gorm.DB) error {
+    if err := svc.CreateItem(ctx, tx, req); err != nil {
+        return err
+    }
+    return nil
 })
-if err != nil {
-   // handle error
-}
 ```
 
+`db/tx.go` menangani begin/commit/rollback termasuk panic.
 
-Plugin system
--------------
-This project includes a pluggable architecture so features can be implemented as separate plugins. Core plugin-related files:
+### Migrasi
 
-- Loader: `internal/pluginloader/loader.go` — responsible for discovering and loading plugins at bootstrap.
-- Registry: `plugins/registry.go` — central registry where plugins register routes, services, and hooks.
-- Types & priorities: `plugins/types.go` and `plugins/middleware_priorities.go` — define plugin interfaces and middleware ordering.
+Command `migrate` ada di paket `console` (bukan di binary — donisgo tidak
+mengirim binary). Aplikasi/starter memanggil `console.Execute()` dari
+`main`-nya sendiri, sehingga subcommand `migrate` dan `seed` tersedia di CLI
+aplikasi.
 
-Key concepts
-- Discovery: plugins are created under the `plugins/` directory. Each plugin has its own folder with optional `migrations/`, handlers, and registration code. `plugins/` already ships two framework packages: `pages` (built-in, see below) and `plugin_registry` (inter-plugin contracts).
-- Registration: plugins register themselves with the registry during application bootstrap in `cmd/server/main.go` and `cmd/console/main.go`; this allows them to add routes, middleware, and service hooks.
-- Service deps: plugins receive shared dependencies through `plugins.ServiceDeps`, currently `DB *gorm.DB` and `Store storage.Store`.
-- Middleware ordering: plugin middleware is executed according to priorities defined in `plugins/middleware_priorities.go`. Valid targets are `global`, `admin`, and `api`.
-- Migrations: plugins can include DB migrations under `plugins/{plugin_id}/migrations/{db_type}` (e.g., `migrations/postgres/`); the console migrate commands detect and apply plugin migrations in the configured order.
+- File migrasi berada di `migrations/{db_type}` (core) dan
+  `plugins/{plugin_id}/migrations/{db_type}` (plugin).
+- Helper migrasi & integrasi CLI ada di `console/migrate.go`.
+- `AutoMigrate` GORM untuk development; produksi pakai migrasi terstruktur.
 
-Integration notes
-- To enable a plugin, create it in the `plugins/` directory, ensure the plugin is registered in both `cmd/server/main.go` and `cmd/console/main.go` (see Plugin registration quickstart below).
-- Plugins should be written to be defensive: validate inputs, avoid global state, and return errors that the core can log and surface gracefully.
-- Hot-reload is not assumed; plugins are loaded at bootstrap. For runtime reloading, add explicit support in the loader and consider concurrency/consistency implications.
+Paket `console`
+---------------
+`console` mengekspos CLI framework:
 
-Testing & safety
-- Test plugins in isolation by running their handlers/services against a test instance of the registry and a sandbox DB.
-
-Built-in plugins (permanent — jangan dihapus)
----------------------------------------------
-donisgo memiliki plugin "bawaan"/paten yang otomatis didaftarkan oleh
-framework — user TIDAK perlu (dan tidak boleh) mendaftarkannya manual:
-
-- **`pages`** (`plugins/pages/plugin.go`) — melayani SPA dari direktori hasil
-  build frontend `./sub_app/webapp/dist` (tidak ada di repo; dibuat oleh build
-  Vite/production), wildcard/catch-all via `router.NoRoute`, dan proxy
-  homepage opsional (`HOMEPAGE_URL`). Selalu di-register **PALING AKHIR** oleh
-  `pluginloader.RegisterLastPlugins()`:
-  - Server: dipanggil dari `app/bootstrap.go` (`attachPlugins`)
-    SETELAH plugin user didaftarkan.
-  - Console: dipanggil dari `console/root.go` (`Run`).
-  Karena ia memegang `router.NoRoute`, urutan terakhir ini WAJIB — semua route
-  spesifik (api/admin/health) dari plugin lain harus menang duluan.
-  ⚠️ **Plugin ini PATEN — JANGAN dihapus.** Registrasinya otomatis via
-  `plugins.EnsurePluginLast` (idempotent + dedup), jadi pages selalu tepat
-  satu dan di akhir, apa pun yang didaftarkan user di `cmd/server/main.go` /
-  `cmd/console/main.go`.
-
-Plugin Registry (komunikasi antar plugin)
------------------------------------------
-`plugins/plugin_registry` menyediakan mekanisme berbagi interface fungsi antar
-plugin tanpa circular import:
-
-1. Definisikan interface contract di `plugins/plugin_registry/registry.go`
-   (mis. `ChatProvider`).
-2. Plugin **PROVIDER** mendaftarkan implementasinya via `Register<X>Provider(...)`
-   di `RegisterServices(deps)`.
-3. Plugin **CONSUMER** memanggil delegation function (mis. `SendMessage(...)`).
-4. Keduanya hanya import `plugin_registry` — tidak saling import.
-5. Setiap delegation function punya **nil-guard**: tanpa provider terdaftar,
-   kembalikan default aman (bukan panic).
-
-Panduan menambah contract baru + contoh `EchoProvider` ada di komentar
-`plugins/plugin_registry/registry.go`. Error bersama antar plugin
-didefinisikan di `plugins/plugin_registry/errors.go` (dideteksi via
-`errors.As`).
-
-Plugin quickstart (CLI generator)
----------------------------------
-The fastest way to create a new plugin is using the console command:
-
-```bash
-# Generate a minimal plugin
-go run ./cmd/console plugin new --id my-plugin
-
-# Generate a CRUD plugin with handlers and services
-go run ./cmd/console plugin new --id my-plugin --template crud
-
-# Generate a middleware-focused plugin
-go run ./cmd/console plugin new --id my-plugin --template middleware
-
-# With custom display name
-go run ./cmd/console plugin new --id my-plugin --name "My Awesome Plugin"
-
-# Skip console command stub
-go run ./cmd/console plugin new --id my-plugin --no-console
-```
-
-**Template options:**
-- `minimal` (default) - Basic plugin with a health check handler
-- `crud` - Includes CRUD handlers and service layer for resource management
-- `middleware` - Focuses on middleware with sample middleware implementation
-
-**Generated structure:**
-- `plugins/my_plugin/plugin.go` - main plugin file implementing `plugins.Plugin` interface
-- `plugins/my_plugin/handlers/` - HTTP handler files (health.go, resource.go, etc.)
-- `plugins/my_plugin/migrations/postgres/` - migration files (`<timestamp>_init.up.sql`, `<timestamp>_init.down.sql`)
-- `plugins/my_plugin/services/` - service layer (CRUD template only)
-- `plugins/my_plugin/middleware/` - middleware implementations (middleware template only)
-
-**After generating, you must register the plugin in both:**
-- `cmd/server/main.go` - for HTTP server routes and middleware
-- `cmd/console/main.go` - for console commands (migrations, seeds, custom commands)
-
-Plugin registration (manual)
------------------------------
-To manually create a plugin or understand the structure:
-
-1. Create a plugin package under `plugins/<plugin_id>/` in your workspace.
-2. Implement the `plugins.Plugin` interface (see `plugins/types.go`). Minimal responsibilities:
-   - `ID() string` — return plugin id
-   - `RegisterServices(deps plugins.ServiceDeps) error` — initialize plugin services using shared DB/storage deps
-   - `RegisterMiddleware() []plugins.MiddlewareDescriptor` — provide middleware descriptors (Target: `global`, `admin`, `api`)
-   - `RegisterRoutes(router *gin.Engine, admin *gin.RouterGroup, api *gin.RouterGroup) error` — attach routes
-   - `Seed() error` — optional seed data
-   - `ConsoleCommands() []*cobra.Command` — optional CLI commands
-
-3. Register the plugin in both `cmd/server/main.go` and `cmd/console/main.go`:
-
-**cmd/server/main.go:**
 ```go
 import (
-   // ... other imports
-   "github.com/rolldone/donisgo/plugins"
-   myplugin "github.com/rolldone/donisgo/plugins/my_plugin"  // note: use underscore for import path
+    "github.com/rolldone/donisgo/console"
+    "github.com/rolldone/donisgo/plugins"
+    myplugin "example.com/myapp/plugins/my_plugin"
 )
 
 func main() {
-   err := app.Run(app.Options{
-      RegisterPlugins: func() {
-         plugins.RegisterPlugins([]plugins.Plugin{
-            myplugin.New(),
-         })
-      },
-   })
-   // ...
+    console.RegisterAdditionalPlugins([]plugins.Plugin{myplugin.New()})
+    console.Execute()
 }
 ```
 
-**cmd/console/main.go:**
+- `NewRootCmd()` mengembalikan root cobra — tooling aplikasi (mis. generator
+  `plugin new` milik starter) dapat menempelkan command sendiri.
+- `RegisterAdditionalPlugins` mendaftarkan plugin ke registry default sekaligus
+  memasang `ConsoleCommands()` mereka.
+- `plugin new` **tidak** ada di library; ia tinggal di repo starter.
+
+Variabel environment
+--------------------
+Library membaca environment untuk default `app.New`/`db.ConfigFromEnv`/
+`storage.LoadConfig`/`keydb`/`mail`. Berkas `.env` sendiri urusan aplikasi
+(donisgo tidak memuatnya); contoh lengkap ada di
+`.env.example` repo starter.
+
+**Database (GORM)**
+- `DB_TYPE`=`postgres|mysql|mariadb`, `DB_HOST`, `DB_PORT`, `DB_NAME`,
+  `DB_USER`, `DB_PASSWORD`, `DB_SSLMODE` (Postgres).
+- `DB_MAX_OPEN_CONNS`, `DB_MAX_IDLE_CONNS`, `DB_CONN_MAX_LIFETIME_SEC`.
+
+**Auth / Security**
+- `AUTH_JWT_SECRET` — secret kanonis (HS256). Legacy `JWT_SECRET`,
+  `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` masih dibaca sebagai fallback.
+- `JWT_ACCESS_EXP_SECONDS` (900), `JWT_REFRESH_EXP_SECONDS` (1209600),
+  `JWT_RESET_EXP_SECONDS` (3600).
+
+**Cache / Flash message (KeyDB/Redis)**
+- `KEYDB_HOST`, `KEYDB_PORT`, `KEYDB_PASS`, `KEYDB_DB` — kosongkan host/port
+  untuk menonaktifkan.
+
+**Storage**
+- `STORAGE_DRIVER`=`local|s3`, `STORAGE_ROOT` (local), `STORAGE_PUBLIC_URL`,
+  `S3_BUCKET`, `S3_REGION`, `S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`.
+
+**Mailer**
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`,
+  `SMTP_USE_TLS`, `SMTP_STARTTLS`.
+
+**HTTP**
+- `CORS_ALLOWED_ORIGINS` — daftar origin dipisah koma.
+- `TRUSTED_PROXIES` — lihat di bawah.
+
+### Trusted proxies (`ClientIP`)
+
+- `TRUSTED_PROXIES` — daftar IP/CIDR (dipisah koma) yang boleh mengeset
+  `X-Forwarded-For` / `X-Real-IP`; gin memakainya untuk `ClientIP()`.
+- **Kosong (default) = trust none**: header forwarded diabaikan dan
+  `ClientIP()` mengembalikan socket peer. Ini default aman (gin default
+  "percaya semua proxy" membuat IP bisa dipalsukan — issue #3).
+- **Wajib diisi bila aplikasi berjalan di belakang reverse proxy**
+  (nginx/caddy/traefik/NPM). Bila tidak, `ClientIP()` melaporkan IP proxy
+  sehingga rate-limit berbasis IP dan audit log tidak berguna.
+- Entri tidak valid ditolak dengan log `[WARNING]` dan seluruh daftar jatuh ke
+  trust-none; startup tidak pernah gagal karena variabel ini.
+- Override programatik: `app.Config.TrustedProxies` menang atas env (`nil` → env,
+  explicit empty → trust none).
+
+Bootstrapping (sudut pandang library)
+-------------------------------------
+Yang dilakukan `app.New`/`app.NewFromEnv`:
+
+1. Membaca konfigurasi dari environment.
+2. Membuka koneksi DB (GORM) bila tidak di-inject.
+3. Menyiapkan storage (`local`/`s3`) bila tidak di-inject.
+4. Menyiapkan KeyDB/Redis (opsional) dan mailer.
+5. Menyiapkan router gin dengan CORS + trusted proxies.
+6. Memakai registry plugin dari `Config.Plugins` (atau default bila nil).
+7. `RegisterAllServices` → `AttachMiddleware` (prioritas) → `RegisterAllRoutes`.
+8. (Opsional) route swagger bila diaktifkan.
+9. `Run()` menyalakan HTTP server.
+
+Tidak ada plugin yang ditambahkan otomatis — termasuk tidak ada serving
+halaman/SPA.
+
+Request flow
+------------
+1. Request masuk ke router gin milik `App`.
+2. Middleware global berjalan menurut prioritas: gin default (Logger,
+   Recovery) → CORS → middleware plugin.
+3. Middleware auth (bila ada) adalah plugin, bukan bawaan.
+4. Handler plugin/custom berjalan.
+5. Handler memakai service plugin dengan dependency bersama (`*gorm.DB`,
+   `storage.Store`, `keydb`, `mailer`).
+6. Respons diserialisasi dan dikirim; hook plugin dapat memodifikasinya.
+
+Migrasi dari `v0.1.x` (BREAKING)
+--------------------------------
+Perubahan penting di `v0.2.0`:
+
+| Dihapus dari donisgo | Pengganti |
+|---|---|
+| `cmd/server`, `cmd/console` | `cmd/*` di `donisgo-template` |
+| `plugins/pages` | `github.com/rolldone/donisgo-template/plugins/pages` — daftarkan manual + `EnsurePluginLast` |
+| Generator `plugin new` (paket `console`) | `console/` di `donisgo-template` |
+| `internal/pluginloader` | tidak ada — registrasi 100% via `app.Config.Plugins` |
+| Docs app-level & `.env.example` | README + `.env.example` di `donisgo-template` |
+
+**Aplikasi/sub-app yang selama ini mengandalkan serving halaman otomatis WAJIB
+mendaftarkan `pages` eksplisit:**
+
 ```go
-import (
-   // ... other imports
-   "github.com/rolldone/donisgo/console"
-   "github.com/rolldone/donisgo/plugins"
-   myplugin "github.com/rolldone/donisgo/plugins/my_plugin"  // note: use underscore for import path
-)
-
-func main() {
-   console.RegisterAdditionalPlugins([]plugins.Plugin{myplugin.New()})
-   console.Execute()
-}
-```
-
-4. Place DB migrations under `plugins/<plugin_id>/migrations/<db_type>` if needed (e.g., `plugins/myplugin/migrations/postgres/`).
-
-Minimal plugin skeleton (create this as, e.g., `plugins/myplugin/plugin.go`):
-
-```go
-package myplugin
-
-import (
-   "github.com/gin-gonic/gin"
-   "github.com/spf13/cobra"
-   "github.com/rolldone/donisgo/plugins"
-)
-
-type MyPlugin struct{}
-
-func New() plugins.Plugin { return &MyPlugin{} }
-
-func (p *MyPlugin) ID() string { return "myplugin" }
-
-func (p *MyPlugin) RegisterServices(deps plugins.ServiceDeps) error {
-   // deps.DB dan deps.Store tersedia di sini
-   return nil
-}
-
-func (p *MyPlugin) RegisterMiddleware() []plugins.MiddlewareDescriptor {
-   return []plugins.MiddlewareDescriptor{
-      {Name: "myplugin.log", Target: "global", Priority: 100, Handler: func(c *gin.Context) { /*...*/ c.Next() }},
-   }
-}
-
-func (p *MyPlugin) RegisterRoutes(router *gin.Engine, admin *gin.RouterGroup, api *gin.RouterGroup) error {
-   admin.GET("/myplugin/ping", func(c *gin.Context) { c.JSON(200, gin.H{"pong": true}) })
-   _ = router
-   _ = api
-   return nil
-}
-```
-
-Serving local storage from a plugin
-----------------------------------
-If you want a plugin to register static routes that serve files from the local storage root, add the following check inside `RegisterRoutes`. It uses the `Store` instance provided in `RegisterServices` and only registers the routes when the store is a `*storage.LocalStore`:
-
-```go
-func (p *Plugin) RegisterRoutes(router *gin.Engine, admin *gin.RouterGroup, api *gin.RouterGroup) error {
-   if p.service == nil {
-      return fmt.Errorf("myplugin: service not registered")
-   }
-
-   // Jika storage lokal aktif, daftarkan static routes
-   if localStore, ok := p.service.Store.(*storage.LocalStore); ok {
-      router.Static("/assets/products", localStore.GetRoot()+"/products")
-      router.Static("/assets/businesses", localStore.GetRoot()+"/businesses")
-   }
-}
-```
-
-Place this code in your plugin's `RegisterRoutes` so the application serves `/assets/*` paths from the configured `STORAGE_ROOT` when using local storage. This keeps storage URL handling inside the plugin and avoids touching core bootstrap code.
-
-```
-func (p *MyPlugin) Seed() error { return nil }
-
-func (p *MyPlugin) ConsoleCommands() []*cobra.Command { return nil }
-```
-
-Notes:
-- Choose middleware `Priority` carefully so plugins integrate predictably with core middleware.
-- Keep plugins isolated and avoid global mutable state.
-- Register plugins before `plugins.AttachMiddleware` is called (bootstrap handles this via `app.Run` options).
-- Prefer explicit wiring with `app.New(app.Config{Plugins: ...})` over the deprecated `app.Options` hook — see "Wiring the app" below.
-
-- Limit the privileges of plugin-executed operations (DB, external APIs) where possible.
-
-Wiring the app
---------------
-`app.Config` is the explicit, injectable entrypoint (SPEC-004). Every field is
-optional: a nil value falls back to the framework's environment-driven
-behaviour, so you override only what you care about.
-
-```go
-import (
-   "github.com/rolldone/donisgo/app"
-   "github.com/rolldone/donisgo/plugins"
-   myplugin "github.com/rolldone/donisgo/plugins/my_plugin"
-)
+import pagesplugin "github.com/rolldone/donisgo-template/plugins/pages"
 
 application, err := app.New(app.Config{
-   // Optional: inject handles you already own.
-   // DB:    gormDB,          // nil → db.Open(db.ConfigFromEnv())
-   // Store: myStore,         // nil → storage.NewStore(storage.LoadConfig())
-   // KeyDB: keydbClient,     // nil → keydb.New from KEYDB_* env
-   // Mail:  mailer,          // nil → mail.NewMailer()
-   // CORS:  &cors.Config{},  // nil → CORS_ALLOWED_ORIGINS behaviour
-   // TrustedProxies: []string{"10.0.0.0/8"}, // nil → TRUSTED_PROXIES env; empty → trust none
-
-   Plugins: []plugins.Plugin{myplugin.New()},
+    Plugins: []plugins.Plugin{myplugin.New()},
 })
-if err != nil {
-   log.Fatalf("failed to build app: %v", err)
-}
-log.Fatal(application.Run())
+// setelah semua plugin terdaftar, jamin pages terakhir:
+application.GetRegistry().EnsurePluginLast(pagesplugin.New())
 ```
 
-Notes:
-- `Plugins` non-nil → a **fresh, isolated** `plugins.Registry` owned by this
-  `App`. `Plugins` nil → the shared default registry is adopted (transitional
-  behaviour so the deprecated package-level helpers keep working).
-- `app.NewFromEnv()` is sugar for `app.New(app.Config{})` — the legacy
-  environment-driven boot used by `cmd/*`.
-- Resolved dependencies are exposed through `GetStore()`, `GetMailer()`,
-  `GetKeyDB()` and `GetRegistry()`.
-- `app.Run(app.Options{...})` still works but is **deprecated**; `Options`
-  registers into the default registry exactly as before.
+Detail lengkap ada di [`CHANGELOG.md`](CHANGELOG.md) entri `v0.2.0`.
 
+Best practices
+--------------
+**Plugin-first:** implementasikan fitur (auth, manajemen user, logika bisnis)
+sebagai plugin, bukan dengan mengubah core.
 
-Bootstrapping (high level)
---------------------------
-1. `cmd/server` calls bootstrap in `app` to initialize:
-   - Configuration from environment variables
-   - Database connection (GORM)
-   - Storage service (`local` or `s3`)
-   - KeyDB/Redis connection (for flash messages)
-   - Gin router with CORS configuration
-   - Static `/assets` route when local storage is active
-2. Core plugins are loaded via `internal/pluginloader`, then user-provided plugins registered in `cmd/server/main.go`
-3. Plugin services are registered with shared deps (`plugins.ServiceDeps{DB, Store}`)
-4. Plugin middleware are attached to router groups (global, admin, api) based on priority
-5. Plugin routes are registered
-6. Swagger documentation routes are registered (if enabled)
-7. HTTP server is started on configured port
+**Organisasi kode:** daftarkan route/middleware lewat plugin; jaga service layer
+tetap lepas dari HTTP layer (terima `context.Context` + interface repository).
 
-Request flow (execution order)
------------------------------
-1. Client HTTP request arrives at the server binary (`cmd/server`).
-2. Router matches the route and triggers the middleware chain.
-3. Global middleware execute in priority order:
-   - Gin's default middlewares (Logger, Recovery)
-   - CORS middleware (if configured via `CORS_ALLOWED_ORIGINS`)
-   - Plugin middleware (registered according to priorities defined in `plugins/middleware_priorities.go`)
-   - Note: Authentication middleware is NOT included by default — implement in a plugin
-4. After middleware, the matched handler runs (plugin-registered handlers or custom handlers).
-5. Handler calls into plugin services or custom code for business logic, DB interactions, storage, or cache usage.
-6. Shared dependencies come from bootstrap: GORM (`db/gorm.go`), storage (`storage`), and optional KeyDB (`keydb`).
-7. Handler serializes the response (JSON/HTML) and returns it to the client.
-8. Plugin hooks or response middleware may modify the response before it is sent.
+**Database:** teruskan `context.Context`; berikan `*gorm.DB` transaksi secara
+eksplisit ke service; pakai `db.WithTransaction`.
 
-Plugin system notes
--------------------
-- Plugins are loaded at bootstrap and may register routes, middleware, and service hooks.
-- Middleware ordering for plugins is controlled by `plugins/middleware_priorities.go`.
-- Plugins integrate with core services via the registry in `plugins/registry.go`.
+**Testing:** mock DB & service; lihat `mail/mail_test.go` dan `app/app_test.go`
+untuk pola.
 
-Extension points & best practices
---------------------------------
-**Plugin-first approach:**
-- Implement features (auth, user management, business logic) as plugins rather than modifying core files
-- Use `go run ./cmd/console plugin new --id <feature-name>` to generate plugin scaffolds
-- Keep plugins isolated and testable - each plugin should be self-contained
+**Keamanan:** jangan commit secret; validasi input di handler; batasi privilege
+operasi yang dijalankan plugin.
 
-**Code organization:**
-- Add routes/handlers via plugins (recommended) or by modifying `app/bootstrap.go`
-- Register middleware with explicit priority so execution order is predictable
-- Keep service layer decoupled from HTTP layer — services should accept `context.Context` and repository interfaces
-- Prefer plugin-local services initialized from `plugins.ServiceDeps` instead of extending core structs unless truly necessary
-
-**Database & transactions:**
-- Use `context.Context` to pass request identity and cancellation signals into services
-- Pass `*gorm.DB` transactions explicitly to service methods (see Transactions & context patterns section)
-- Use the transaction helper `db.WithTransaction()` in `db/tx.go` to simplify error handling
-
-**Testing:**
-- Mock DB and services for unit testing; see `mail/mail_test.go` for example patterns
-- Test plugins in isolation by providing test `*gorm.DB` and, when needed, a fake `storage.Store`
-- Use `go run ./cmd/console migrate --db <type> up` to run migrations in test databases
-
-**Security:**
-- Implement authentication middleware in a plugin and register with appropriate priority
-- Never commit secrets to version control - use environment variables and secret managers
-- Validate and sanitize all user inputs in handlers before passing to services
-
-Quick file references
----------------------
-- Server entry: `cmd/server/main.go`
-- Console entry: `cmd/console/main.go`
-- Bootstrap: `app/bootstrap.go`
-- Plugin loader: `internal/pluginloader/loader.go`
-- Plugin registry: `plugins/registry.go`
-- Plugin types: `plugins/types.go`
-- DB (GORM): `db/gorm.go`
-- DB transactions: `db/tx.go`
-- Auth utilities (JWT): `auth/jwt.go`
+Referensi file
+--------------
+- Bootstrap & wiring: `app/bootstrap.go`
+- Kontrak & registry plugin: `plugins/types.go`, `plugins/registry.go`
+- Prioritas middleware: `plugins/middleware_priorities.go`
+- Komunikasi antar-plugin: `plugins/plugin_registry/`
+- DB: `db/gorm.go`, transaksi `db/tx.go`, env `db/env.go`
+- Auth: `auth/config.go`, `auth/jwt.go`, `auth/claims_tokens.go`
+- Events: `events/` (`request_reply.go` untuk request–reply)
 - Storage: `storage/config.go`
-- Console commands: `console/`
 - Mailer: `mail/mailer.go`
-- KeyDB client: `keydb/client.go`
+- KeyDB: `keydb/client.go`
+- CLI framework: `console/` (`root.go`, `migrate.go`, `seed.go`)
+- Contoh konsumen library: `examples/library/`
 
-Request Flow Diagram
+Contoh konsumen lengkap ada di [`examples/library/`](examples/library) — modul
+terpisah dengan `replace github.com/rolldone/donisgo => ../..`:
+
+```bash
+cd examples/library && go build ./...
+```
+
+Request flow diagram
 --------------------
-Below is a Mermaid diagram that visualizes the main request path and extension points.
-
 ```
 flowchart LR
-   Client[Client HTTP] --> Server[cmd/server]
+   Client[Client HTTP] --> Server[app.Run / router]
    Server --> Router[Router]
    Router --> MWChain[Middleware Chain]
 
    subgraph Middlewares
-      Core[Core middleware: logging, recovery, CORS, request-id]
-      Auth[Auth middleware: auth]
+      Core[Core middleware: logging, recovery, CORS]
+      Auth[Auth middleware: plugin]
       PluginMW[Plugin middleware (priority-based)]
    end
 
    MWChain --> Core --> Auth --> PluginMW --> Handler[Handler]
 
-   Handler --> Service[Service layer: your plugin's services]
+   Handler --> Service[Service layer: plugin services]
    Service --> DB[GORM (db)]
    DB --> Service
    Service --> Handler
 
    Handler --> Response[Response -> Client]
-
    PluginMW --> Hooks[Plugin hooks / response modifiers]
    Hooks --> Response
 ```
+
+Lisensi
+-------
+MIT — lihat [LICENSE](LICENSE).

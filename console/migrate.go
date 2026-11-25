@@ -264,7 +264,7 @@ func collectTargets(target, dbType string) ([]migrationTarget, error) {
 
 	if len(res) == 0 {
 		if !pluginRegistered && target != "core" && target != "all" {
-			return nil, fmt.Errorf("plugin %q is not registered; add it in cmd/server/main.go or cmd/console/main.go before running migrate", target)
+			return nil, fmt.Errorf("plugin %q is not registered; register it via console.RegisterAdditionalPlugins (or app.Config.Plugins) before running migrate", target)
 		}
 		return nil, fmt.Errorf("no migration paths found for target %q", target)
 	}

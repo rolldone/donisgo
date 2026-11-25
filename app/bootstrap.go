@@ -21,7 +21,6 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/rolldone/donisgo/db"
-	"github.com/rolldone/donisgo/internal/pluginloader"
 	"github.com/rolldone/donisgo/keydb"
 	"github.com/rolldone/donisgo/mail"
 	"github.com/rolldone/donisgo/plugins"
@@ -31,7 +30,7 @@ import (
 // Options customizes how the donisgo app boots.
 //
 // Deprecated: use Config with New instead. Options is kept so existing
-// entrypoints (cmd/server/main.go) keep working unchanged.
+// application entrypoints keep working unchanged.
 type Options struct {
 	// RegisterPlugins allows callers to register additional plugins (user-provided).
 	RegisterPlugins func()
@@ -65,7 +64,7 @@ func Run(opts Options) error {
 
 // NewFromEnv assembles the application using the framework's environment
 // variables. It is sugar for New(Config{}) and is the env-driven entrypoint
-// used by cmd/server.
+// used by application entrypoints.
 func NewFromEnv() (*App, error) {
 	return New(Config{})
 }
@@ -463,21 +462,19 @@ func (a *App) GetRegistry() *plugins.Registry {
 	return a.registry
 }
 
-// attachPlugins registers core + user plugins, then attaches middleware and routes.
+// attachPlugins registers user plugins, then attaches middleware and routes.
 //
-// hook is the deprecated Options.RegisterPlugins callback; it runs between the
-// core plugins and the trailing framework plugins, preserving legacy ordering.
+// Registration is entirely the caller's responsibility (app.Config.Plugins or
+// the deprecated Options.RegisterPlugins hook): donisgo ships no built-in
+// plugins. Plugins that must hold a catch-all (e.g. a pages/SPA plugin living
+// in the starter repo) should be ordered last by the caller via
+// plugins.Registry.EnsurePluginLast.
+//
+// hook is the deprecated Options.RegisterPlugins callback.
 func (a *App) attachPlugins(userPlugins []plugins.Plugin, hook func()) error {
-	pluginloader.RegisterCorePluginsTo(a.registry)
-
 	if userPlugins == nil && hook != nil {
 		hook()
 	}
-
-	// Framework "bawaan" plugins (pages) dijamin SELALU terakhir di registry
-	// — mereka memegang wildcard/catch-all (router.NoRoute). JANGAN dipindah
-	// sebelum plugin user, atau urutan pages jadi salah.
-	pluginloader.RegisterLastPluginsTo(a.registry)
 
 	a.registry.AttachMiddleware(map[string]*gin.RouterGroup{
 		"global": a.rootGroup,
@@ -498,10 +495,11 @@ func (a *App) registerAdminRoutes() {
 }
 
 // registerStoreRoutes wires all core store/public endpoints.
-// PR-20260816: KOSONG (sengaja) — SPA serving, root "/", NoRoute catch-all,
-// StaticFS, dan wildcard SEMUA pindah ke plugin `pages` (plugins/pages/
-// plugin.go — plugin bawaan framework). Bootstrap tidak handle route
-// tampilan lagi.
+// KOSONG (sengaja) — donisgo tidak lagi menyajikan halaman/SPA secara otomatis
+// sejak v0.2.0: SPA serving, root "/", NoRoute catch-all, dan StaticFS adalah
+// tanggung jawab aplikasi/starter (mis. plugin `pages` di
+// github.com/rolldone/donisgo-template). Bootstrap tidak menangani route
+// tampilan.
 //
 // ⚠️ Fungsi ini sengaja dibiarkan ADA + kosong — TITIK FORCE: kalau suatu
 // saat butuh route publik yang harus di-register paling awal (sebelum

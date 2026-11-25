@@ -336,8 +336,8 @@ func TestGetStore(t *testing.T) {
 }
 
 // TestAttachPlugins_UsesOwnRegistry verifies an App with explicit plugins
-// attaches middleware/routes through its own registry, keeps the user plugin
-// first and `pages` last, and leaves the default registry untouched.
+// attaches middleware/routes through its own registry, registers exactly the
+// user plugins (donisgo ships none), and leaves the default registry untouched.
 // No database is needed: gdb is nil and the fake plugin ignores deps.
 func TestAttachPlugins_UsesOwnRegistry(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -359,24 +359,50 @@ func TestAttachPlugins_UsesOwnRegistry(t *testing.T) {
 	}
 
 	got := ids(a.GetRegistry().RegisteredPlugins())
-	if len(got) < 2 {
-		t.Fatalf("expected user plugin + pages, got %v", got)
-	}
-	if got[0] != "mine" {
-		t.Fatalf("expected user plugin first, got %v", got)
-	}
-	if got[len(got)-1] != "pages" {
-		t.Fatalf("expected pages last, got %v", got)
+	if len(got) != 1 || got[0] != "mine" {
+		t.Fatalf("expected exactly the user plugin, got %v", got)
 	}
 	if after := len(plugins.DefaultRegistry().RegisteredPlugins()); after != defaultBefore {
 		t.Fatalf("default registry leaked: %d -> %d", defaultBefore, after)
 	}
 }
 
-// TestAttachPlugins_LegacyHookRunsInOrder verifies the deprecated Options hook
-// still runs before `pages` is appended, and that it registers into the adopted
-// default registry (legacy semantics preserved).
-func TestAttachPlugins_LegacyHookRunsInOrder(t *testing.T) {
+// TestAttachPlugins_KeepsCallerOrder verifies attachPlugins does not reorder or
+// append plugins: framework no longer registers anything itself, so a caller
+// that wants a catch-all plugin last must order it last (EnsurePluginLast).
+func TestAttachPlugins_KeepsCallerOrder(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	r := gin.New()
+	a := &App{
+		router:     r,
+		rootGroup:  r.Group(""),
+		adminGroup: r.Group("/admin"),
+		frontGroup: r.Group("/api"),
+		store:      fakeStore{},
+		registry:   registryFor(Config{Plugins: []plugins.Plugin{&fakePlugin{id: "mine"}}}),
+	}
+
+	a.GetRegistry().EnsurePluginLast(&fakePlugin{id: "catchall"})
+	if err := a.attachPlugins([]plugins.Plugin{&fakePlugin{id: "mine"}}, nil); err != nil {
+		t.Fatalf("attachPlugins: %v", err)
+	}
+
+	got := ids(a.GetRegistry().RegisteredPlugins())
+	if len(got) != 2 {
+		t.Fatalf("expected user plugin + caller-ordered catch-all, got %v", got)
+	}
+	if got[0] != "mine" {
+		t.Fatalf("expected user plugin first, got %v", got)
+	}
+	if got[len(got)-1] != "catchall" {
+		t.Fatalf("expected caller-ordered catch-all last, got %v", got)
+	}
+}
+
+// TestAttachPlugins_LegacyHookRuns verifies the deprecated Options hook still
+// runs and registers into the adopted default registry (legacy semantics).
+func TestAttachPlugins_LegacyHookRuns(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	r := gin.New()
@@ -408,12 +434,6 @@ func TestAttachPlugins_LegacyHookRunsInOrder(t *testing.T) {
 	got := ids(plugins.DefaultRegistry().RegisteredPlugins())
 	if indexOf(got, "from-hook") < 0 {
 		t.Fatalf("hook-registered plugin missing from default registry: %v", got)
-	}
-	if got[len(got)-1] != "pages" {
-		t.Fatalf("expected pages last, got %v", got)
-	}
-	if indexOf(got, "from-hook") > indexOf(got, "pages") {
-		t.Fatalf("hook plugin must precede pages, got %v", got)
 	}
 }
 
