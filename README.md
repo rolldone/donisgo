@@ -10,6 +10,7 @@ Table of contents
 - Overview
 - Quick Start
 - Using donisgo as a library
+- Versioning & releases
 - What's included
 - What's NOT included (implement via plugins)
 - Main components
@@ -192,6 +193,20 @@ A complete, buildable consumer lives in
 ```bash
 cd examples/library && go build ./...
 ```
+
+Versioning & releases
+---------------------
+donisgo memakai [SemVer](https://semver.org/) dengan tag Git di
+`github.com/rolldone/donisgo`. Selalu pin versi secara eksplisit:
+
+```bash
+go get github.com/rolldone/donisgo@v0.1.2
+```
+
+⚠️ Rilis masih di jalur `v0.x`: perubahan yang tidak kompatibel dapat muncul pada
+bump **minor** (`v0.1.x` → `v0.2.0`), jadi baca catatan rilis sebelum naik versi.
+Riwayat lengkap ada di [`CHANGELOG.md`](CHANGELOG.md); tag yang tersedia:
+`v0.1.0`, `v0.1.1`, `v0.1.2` (lihat GitHub Releases/tags).
 
 What's included
 ---------------
