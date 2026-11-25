@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/rolldone/donisgo/db"
-	"github.com/rolldone/donisgo/internal/plugins"
+	"github.com/rolldone/donisgo/plugins"
 	"github.com/rolldone/donisgo/storage"
 
 	"gorm.io/gorm"

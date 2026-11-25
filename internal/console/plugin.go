@@ -251,7 +251,7 @@ func pluginGoTemplateMinimal(mod, pkg, id, display string, includeConsole bool) 
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
-	"%s/internal/plugins"
+	"%s/plugins"
 	pluginhandlers "%s/plugins/%s/handlers"
 )
 
@@ -303,7 +303,7 @@ func pluginGoTemplateCRUD(mod, pkg, id, display string, includeConsole bool) str
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
-	"%s/internal/plugins"
+	"%s/plugins"
 	pluginhandlers "%s/plugins/%s/handlers"
 )
 
@@ -356,7 +356,7 @@ func pluginGoTemplateMiddleware(mod, pkg, id, display string, includeConsole boo
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
-	"%s/internal/plugins"
+	"%s/plugins"
 	pluginmiddleware "%s/plugins/%s/middleware"
 )
 
