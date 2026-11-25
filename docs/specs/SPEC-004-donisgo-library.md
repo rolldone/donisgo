@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | ID | SPEC-004 |
-| Status | **DRAFT — menunggu ACC** |
+| Status | **APPROVED — ACC pemilik repo, 2026-11-25** |
 | Ref issue | https://github.com/rolldone/donisgo/issues/4 |
 | WO terkait | WO-01 topic `1795575759044` (status: blocked, terbuka setelah SPEC ini ACC) |
 | Penyusun | Manager Agent |
@@ -149,13 +149,15 @@ Gerbang kualitas tiap fase: `gofmt -l .` kosong, `go vet ./...`, `go build ./...
 
 ## 7. Acceptance Criteria (SPEC ini)
 
-- [ ] ACC atas keputusan D1–D6 dan jawaban atas OQ-1..OQ-4 (§8).
+- [x] ACC atas keputusan D1–D6 dan jawaban atas OQ-1..OQ-4 (§8) — **ACC 2026-11-25: semua OQ mengikuti rekomendasi.**
 - [ ] WO-01 topic `1795575759044` dibuka: `blocked → planned`, checklist fase jadi acuan eksekusi.
 - [ ] Bukti akhir eksekusi (fase 5): modul eksternal contoh `go get` + import hijau.
 
 ## 8. Open Questions (butuh jawaban pemilik repo)
 
-- **OQ-1** — Path publik root-level (rekomendasi saya) atau pakai grup `pkg/`? *(rekomendasi: root-level)*
-- **OQ-2** — `app` ikut dipublikasikan di refactor ini (fase 4) atau ditunda setelah v0 pertama? *(rekomendasi: ikut)*
-- **OQ-3** — Alias `internal/` dihapus langsung tanpa masa alias (rekomendasi saya, pre-1.0) atau perlu masa transisi? *(rekomendasi: hapus langsung)*
-- **OQ-4** — Tag `v0.1.0` saat semua fase selesai — disetujui? *(rekomendasi: ya)*
+> **RESOLVED 2026-11-25** — pemilik repo memilih mengikuti seluruh rekomendasi penyusun.
+
+- **OQ-1** — Path publik root-level (rekomendasi saya) atau pakai grup `pkg/`? → **Root-level** ✅
+- **OQ-2** — `app` ikut dipublikasikan di refactor ini (fase 4) atau ditunda setelah v0 pertama? → **Ikut, fase 4** ✅
+- **OQ-3** — Alias `internal/` dihapus langsung tanpa masa alias (rekomendasi saya, pre-1.0) atau perlu masa transisi? → **Hapus langsung** ✅
+- **OQ-4** — Tag `v0.1.0` saat semua fase selesai — disetujui? → **Ya** ✅
