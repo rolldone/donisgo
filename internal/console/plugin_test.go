@@ -73,7 +73,7 @@ func TestPluginTemplates_UseModulePath(t *testing.T) {
 			name: "minimal",
 			got:  pluginGoTemplateMinimal(mod, pkgName, id, display, true),
 			want: []string{
-				`"example.com/historic_service/internal/plugins"`,
+				`"example.com/historic_service/plugins"`,
 				`pluginhandlers "example.com/historic_service/plugins/my-plugin/handlers"`,
 				`// Plugin My Plugin provides a minimal scaffold.`,
 				`func (p *Plugin) ID() string { return "my-plugin" }`,
@@ -83,7 +83,7 @@ func TestPluginTemplates_UseModulePath(t *testing.T) {
 			name: "crud",
 			got:  pluginGoTemplateCRUD(mod, pkgName, id, display, true),
 			want: []string{
-				`"example.com/historic_service/internal/plugins"`,
+				`"example.com/historic_service/plugins"`,
 				`pluginhandlers "example.com/historic_service/plugins/my-plugin/handlers"`,
 				`admin.GET("/plugins/my-plugin/items", pluginhandlers.ListItems)`,
 				`admin.GET("/plugins/my-plugin/items/:id", pluginhandlers.GetItem)`,
@@ -93,7 +93,7 @@ func TestPluginTemplates_UseModulePath(t *testing.T) {
 			name: "middleware",
 			got:  pluginGoTemplateMiddleware(mod, pkgName, id, display, true),
 			want: []string{
-				`"example.com/historic_service/internal/plugins"`,
+				`"example.com/historic_service/plugins"`,
 				`pluginmiddleware "example.com/historic_service/plugins/my-plugin/middleware"`,
 				`Name:     "my-plugin-sample-mw",`,
 			},

@@ -3,7 +3,7 @@ package pluginloader
 import (
 	"testing"
 
-	"github.com/rolldone/donisgo/internal/plugins"
+	"github.com/rolldone/donisgo/plugins"
 )
 
 // TestRegisterLastPluginsPutsPagesLast memverifikasi invariant framework:

@@ -12,7 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
 
-	"github.com/rolldone/donisgo/internal/plugins"
+	"github.com/rolldone/donisgo/plugins"
 )
 
 const (

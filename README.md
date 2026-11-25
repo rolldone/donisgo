@@ -96,7 +96,7 @@ Main components
 - Business services: `internal/admin/services`
 - Database (GORM): `db/gorm.go`
 - Auth utilities (JWT): `auth` (token generation/verification helpers)
-- Plugin system: `internal/pluginloader` and `internal/plugins`
+- Plugin system: `internal/pluginloader` and `plugins`
 - CLI / migrations: `internal/console`
 - Mailer: `mail`
 - KeyDB/Redis client: `keydb`
@@ -631,14 +631,14 @@ Plugin system
 This project includes a pluggable architecture so features can be implemented as separate plugins. Core plugin-related files:
 
 - Loader: `internal/pluginloader/loader.go` — responsible for discovering and loading plugins at bootstrap.
-- Registry: `internal/plugins/registry.go` — central registry where plugins register routes, services, and hooks.
-- Types & priorities: `internal/plugins/types.go` and `internal/plugins/middleware_priorities.go` — define plugin interfaces and middleware ordering.
+- Registry: `plugins/registry.go` — central registry where plugins register routes, services, and hooks.
+- Types & priorities: `plugins/types.go` and `plugins/middleware_priorities.go` — define plugin interfaces and middleware ordering.
 
 Key concepts
 - Discovery: plugins are created under the `plugins/` directory. Each plugin has its own folder with optional `migrations/`, handlers, and registration code. `plugins/` already ships two framework packages: `pages` (built-in, see below) and `plugin_registry` (inter-plugin contracts).
 - Registration: plugins register themselves with the registry during application bootstrap in `cmd/server/main.go` and `cmd/console/main.go`; this allows them to add routes, middleware, and service hooks.
 - Service deps: plugins receive shared dependencies through `plugins.ServiceDeps`, currently `DB *gorm.DB` and `Store storage.Store`.
-- Middleware ordering: plugin middleware is executed according to priorities defined in `internal/plugins/middleware_priorities.go`. Valid targets are `global`, `admin`, and `api`.
+- Middleware ordering: plugin middleware is executed according to priorities defined in `plugins/middleware_priorities.go`. Valid targets are `global`, `admin`, and `api`.
 - Migrations: plugins can include DB migrations under `plugins/{plugin_id}/migrations/{db_type}` (e.g., `migrations/postgres/`); the console migrate commands detect and apply plugin migrations in the configured order.
 
 Integration notes
@@ -729,7 +729,7 @@ Plugin registration (manual)
 To manually create a plugin or understand the structure:
 
 1. Create a plugin package under `plugins/<plugin_id>/` in your workspace.
-2. Implement the `plugins.Plugin` interface (see `internal/plugins/types.go`). Minimal responsibilities:
+2. Implement the `plugins.Plugin` interface (see `plugins/types.go`). Minimal responsibilities:
    - `ID() string` — return plugin id
    - `RegisterServices(deps plugins.ServiceDeps) error` — initialize plugin services using shared DB/storage deps
    - `RegisterMiddleware() []plugins.MiddlewareDescriptor` — provide middleware descriptors (Target: `global`, `admin`, `api`)
@@ -743,7 +743,7 @@ To manually create a plugin or understand the structure:
 ```go
 import (
    // ... other imports
-   "github.com/rolldone/donisgo/internal/plugins"
+   "github.com/rolldone/donisgo/plugins"
    myplugin "github.com/rolldone/donisgo/plugins/my_plugin"  // note: use underscore for import path
 )
 
@@ -764,7 +764,7 @@ func main() {
 import (
    // ... other imports
    "github.com/rolldone/donisgo/internal/console"
-   "github.com/rolldone/donisgo/internal/plugins"
+   "github.com/rolldone/donisgo/plugins"
    myplugin "github.com/rolldone/donisgo/plugins/my_plugin"  // note: use underscore for import path
 )
 
@@ -784,7 +784,7 @@ package myplugin
 import (
    "github.com/gin-gonic/gin"
    "github.com/spf13/cobra"
-   "github.com/rolldone/donisgo/internal/plugins"
+   "github.com/rolldone/donisgo/plugins"
 )
 
 type MyPlugin struct{}
@@ -869,7 +869,7 @@ Request flow (execution order)
 3. Global middleware execute in priority order:
    - Gin's default middlewares (Logger, Recovery)
    - CORS middleware (if configured via `CORS_ALLOWED_ORIGINS`)
-   - Plugin middleware (registered according to priorities defined in `internal/plugins/middleware_priorities.go`)
+   - Plugin middleware (registered according to priorities defined in `plugins/middleware_priorities.go`)
    - Note: Authentication middleware is NOT included by default — implement in a plugin
 4. After middleware, the matched handler runs (plugin-registered handlers or custom handlers).
 5. Handler calls into plugin services or custom code for business logic, DB interactions, storage, or cache usage.
@@ -880,8 +880,8 @@ Request flow (execution order)
 Plugin system notes
 -------------------
 - Plugins are loaded at bootstrap and may register routes, middleware, and service hooks.
-- Middleware ordering for plugins is controlled by `internal/plugins/middleware_priorities.go`.
-- Plugins integrate with core services via the registry in `internal/plugins/registry.go`.
+- Middleware ordering for plugins is controlled by `plugins/middleware_priorities.go`.
+- Plugins integrate with core services via the registry in `plugins/registry.go`.
 
 Extension points & best practices
 --------------------------------
@@ -918,8 +918,8 @@ Quick file references
 - Bootstrap: `internal/app/bootstrap.go`
 - Admin services: `internal/admin/services/services.go`
 - Plugin loader: `internal/pluginloader/loader.go`
-- Plugin registry: `internal/plugins/registry.go`
-- Plugin types: `internal/plugins/types.go`
+- Plugin registry: `plugins/registry.go`
+- Plugin types: `plugins/types.go`
 - DB (GORM): `db/gorm.go`
 - DB transactions: `db/tx.go`
 - Auth utilities (JWT): `auth/jwt.go`

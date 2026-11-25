@@ -17,7 +17,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/rolldone/donisgo/db"
-	"github.com/rolldone/donisgo/internal/plugins"
+	"github.com/rolldone/donisgo/plugins"
 )
 
 const (

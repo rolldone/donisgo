@@ -19,8 +19,8 @@ import (
 
 	"github.com/rolldone/donisgo/db"
 	"github.com/rolldone/donisgo/internal/pluginloader"
-	"github.com/rolldone/donisgo/internal/plugins"
 	"github.com/rolldone/donisgo/keydb"
+	"github.com/rolldone/donisgo/plugins"
 	"github.com/rolldone/donisgo/storage"
 
 	"gorm.io/gorm"
@@ -50,6 +50,7 @@ type App struct {
 	gdb        *gorm.DB
 	store      storage.Store
 	keydb      *keydb.Client
+	registry   *plugins.Registry
 }
 
 // New assembles the application: DB, services, routes, plugins, swagger.
@@ -270,17 +271,23 @@ func (a *App) attachPlugins(registerPlugins func()) error {
 	// sebelum registerPlugins(), atau urutan pages jadi salah.
 	pluginloader.RegisterLastPlugins()
 
-	plugins.AttachMiddleware(map[string]*gin.RouterGroup{
+	// pluginloader and the user's registerPlugins() hook still go through the
+	// deprecated package-level API (they are migrated in Fase 4), so bootstrap
+	// adopts the registry they populate. It is a *plugins.Registry instance and
+	// is owned by this App from here on.
+	a.registry = plugins.DefaultRegistry()
+
+	a.registry.AttachMiddleware(map[string]*gin.RouterGroup{
 		"global": a.rootGroup,
 		"admin":  a.adminGroup,
 		"api":    a.frontGroup,
 	})
 
-	if err := plugins.RegisterAllServices(a.gdb, a.store); err != nil {
+	if err := a.registry.RegisterAllServices(a.gdb, a.store); err != nil {
 		return err
 	}
 
-	return plugins.RegisterAllRoutes(a.router, a.adminGroup, a.frontGroup, a.gdb, a.store)
+	return a.registry.RegisterAllRoutes(a.router, a.adminGroup, a.frontGroup, a.gdb, a.store)
 }
 
 // registerAdminRoutes wires all core admin endpoints.

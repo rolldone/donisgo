@@ -1,7 +1,7 @@
 package pluginloader
 
 import (
-	"github.com/rolldone/donisgo/internal/plugins"
+	"github.com/rolldone/donisgo/plugins"
 	pagesplugin "github.com/rolldone/donisgo/plugins/pages"
 )
 
