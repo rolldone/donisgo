@@ -36,8 +36,10 @@ type Config struct {
 	// registry is adopted for backward compatibility.
 	Plugins []plugins.Plugin
 
-	// TrustedProxies is passed to gin's SetTrustedProxies when non-empty.
-	// Empty leaves gin's default (trust all proxies) untouched, so this refactor
-	// does not change any behaviour.
+	// TrustedProxies is the list of proxies (IP or CIDR) whose forwarding
+	// headers are trusted, e.g. []string{"10.0.0.0/8"}.
+	//
+	// nil → built from the TRUSTED_PROXIES environment variable (comma
+	// separated); empty → trust NO proxy, which is the safe default.
 	TrustedProxies []string
 }

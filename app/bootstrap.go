@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -114,7 +115,7 @@ func newApp(cfg Config, hook func()) (*App, error) {
 
 	r := gin.Default()
 
-	if err := configureTrustedProxies(r, cfg.TrustedProxies); err != nil {
+	if err := configureTrustedProxies(r, resolveTrustedProxies(cfg)); err != nil {
 		return nil, err
 	}
 
@@ -224,11 +225,81 @@ func resolveKeyDB(cfg Config) *keydb.Client {
 	return client
 }
 
-// configureTrustedProxies applies cfg.TrustedProxies to the router. An empty
-// list leaves gin's defaults untouched, so this refactor changes no behaviour.
+// resolveTrustedProxies returns cfg.TrustedProxies when the caller supplied a
+// list (an explicit empty non-nil slice still means "trust no proxy" and wins),
+// otherwise the list parsed from TRUSTED_PROXIES.
+//
+// Unparseable env values never abort startup: they log a warning and fall back
+// to an empty list (trust-none), so a typo can never silently widen the trusted
+// range back to "every proxy".
+func resolveTrustedProxies(cfg Config) []string {
+	if cfg.TrustedProxies != nil {
+		return cfg.TrustedProxies
+	}
+
+	raw := strings.TrimSpace(os.Getenv("TRUSTED_PROXIES"))
+	if raw == "" {
+		return nil
+	}
+
+	proxies, err := parseTrustedProxies(raw)
+	if err != nil {
+		log.Printf("[WARNING] TRUSTED_PROXIES ignored, trusting no proxy: %v", err)
+		return nil
+	}
+	return proxies
+}
+
+// parseTrustedProxies splits a comma-separated list of IPs/CIDRs (as accepted
+// by gin's SetTrustedProxies) and validates every entry up front, so malformed
+// values are reported instead of being half-applied.
+func parseTrustedProxies(raw string) ([]string, error) {
+	parts := strings.Split(raw, ",")
+	proxies := make([]string, 0, len(parts))
+	for _, part := range parts {
+		entry := strings.TrimSpace(part)
+		if entry == "" {
+			continue
+		}
+		if err := validateProxyEntry(entry); err != nil {
+			return nil, err
+		}
+		proxies = append(proxies, entry)
+	}
+	if len(proxies) == 0 {
+		return nil, nil
+	}
+	return proxies, nil
+}
+
+// validateProxyEntry accepts either a bare IP ("172.16.0.5") or a CIDR
+// ("10.0.0.0/8"), mirroring what gin parses.
+func validateProxyEntry(entry string) error {
+	if strings.Contains(entry, "/") {
+		if _, _, err := net.ParseCIDR(entry); err != nil {
+			return fmt.Errorf("invalid CIDR %q: %w", entry, err)
+		}
+		return nil
+	}
+	if net.ParseIP(entry) == nil {
+		return fmt.Errorf("invalid IP address %q", entry)
+	}
+	return nil
+}
+
+// configureTrustedProxies applies the trusted-proxy list to the router.
+//
+// An empty list does NOT mean "leave gin's defaults alone": gin's default trusts
+// every proxy, so anyone could forge X-Forwarded-For/X-Real-IP and choose what
+// ClientIP() returns (breaking IP-based rate limits and audit logs). Empty
+// therefore maps to SetTrustedProxies(nil) = trust no proxy, and ClientIP()
+// falls back to the socket peer (RemoteAddr).
+//
+// Set TRUSTED_PROXIES when — and only when — the app runs behind a reverse
+// proxy (nginx/caddy/traefik/NPM).
 func configureTrustedProxies(r *gin.Engine, proxies []string) error {
 	if len(proxies) == 0 {
-		return nil
+		return r.SetTrustedProxies(nil)
 	}
 	if err := r.SetTrustedProxies(proxies); err != nil {
 		return fmt.Errorf("failed to set trusted proxies: %w", err)
