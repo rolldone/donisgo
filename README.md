@@ -31,7 +31,7 @@ Overview
 - Main binaries: `cmd/server/main.go` (HTTP server) and `cmd/console/main.go` (CLI/migrations)
 - Core philosophy: provide essential infrastructure (DB, routing, plugins) and let you implement features via plugins or custom code
 - **No built-in authentication or user management** - implement via plugins (recommended) or custom middleware
-- Application bootstrap and dependency wiring are in `internal/app/bootstrap.go`
+- Application bootstrap and dependency wiring are in `app/bootstrap.go`
 - Extensible via a plugin system that supports middleware, routes, services, migrations, and console commands
 
 Quick Start
@@ -92,7 +92,7 @@ What's NOT included (implement via plugins)
 
 Main components
 ---------------
-- Bootstrap & wiring: `internal/app/bootstrap.go`
+- Bootstrap & wiring: `app/bootstrap.go`
 - Business services: `internal/admin/services`
 - Database (GORM): `db/gorm.go`
 - Auth utilities (JWT): `auth` (token generation/verification helpers)
@@ -658,7 +658,7 @@ framework — user TIDAK perlu (dan tidak boleh) mendaftarkannya manual:
   `./sub_app/webapp/dist`, wildcard/catch-all via `router.NoRoute`, dan proxy
   homepage opsional (`HOMEPAGE_URL`). Selalu di-register **PALING AKHIR** oleh
   `pluginloader.RegisterLastPlugins()`:
-  - Server: dipanggil dari `internal/app/bootstrap.go` (`attachPlugins`)
+  - Server: dipanggil dari `app/bootstrap.go` (`attachPlugins`)
     SETELAH plugin user didaftarkan.
   - Console: dipanggil dari `internal/console/root.go` (`Run`).
   Karena ia memegang `router.NoRoute`, urutan terakhir ini WAJIB — semua route
@@ -842,13 +842,55 @@ Notes:
 - Choose middleware `Priority` carefully so plugins integrate predictably with core middleware.
 - Keep plugins isolated and avoid global mutable state.
 - Register plugins before `plugins.AttachMiddleware` is called (bootstrap handles this via `app.Run` options).
+- Prefer explicit wiring with `app.New(app.Config{Plugins: ...})` over the deprecated `app.Options` hook — see "Wiring the app" below.
 
 - Limit the privileges of plugin-executed operations (DB, external APIs) where possible.
+
+Wiring the app
+--------------
+`app.Config` is the explicit, injectable entrypoint (SPEC-004). Every field is
+optional: a nil value falls back to the framework's environment-driven
+behaviour, so you override only what you care about.
+
+```go
+import (
+   "github.com/rolldone/donisgo/app"
+   "github.com/rolldone/donisgo/plugins"
+   myplugin "github.com/rolldone/donisgo/plugins/my_plugin"
+)
+
+application, err := app.New(app.Config{
+   // Optional: inject handles you already own.
+   // DB:    gormDB,          // nil → db.Open(db.ConfigFromEnv())
+   // Store: myStore,         // nil → storage.NewStore(storage.LoadConfig())
+   // KeyDB: keydbClient,     // nil → keydb.New from KEYDB_* env
+   // Mail:  mailer,          // nil → mail.NewMailer()
+   // CORS:  &cors.Config{},  // nil → CORS_ALLOWED_ORIGINS behaviour
+   // TrustedProxies: []string{"10.0.0.0/8"}, // empty → gin default (trust all)
+
+   Plugins: []plugins.Plugin{myplugin.New()},
+})
+if err != nil {
+   log.Fatalf("failed to build app: %v", err)
+}
+log.Fatal(application.Run())
+```
+
+Notes:
+- `Plugins` non-nil → a **fresh, isolated** `plugins.Registry` owned by this
+  `App`. `Plugins` nil → the shared default registry is adopted (transitional
+  behaviour so the deprecated package-level helpers keep working).
+- `app.NewFromEnv()` is sugar for `app.New(app.Config{})` — the legacy
+  environment-driven boot used by `cmd/*`.
+- Resolved dependencies are exposed through `GetStore()`, `GetMailer()`,
+  `GetKeyDB()` and `GetRegistry()`.
+- `app.Run(app.Options{...})` still works but is **deprecated**; `Options`
+  registers into the default registry exactly as before.
 
 
 Bootstrapping (high level)
 --------------------------
-1. `cmd/server` calls bootstrap in `internal/app` to initialize:
+1. `cmd/server` calls bootstrap in `app` to initialize:
    - Configuration from environment variables
    - Database connection (GORM)
    - Storage service (`local` or `s3`)
@@ -891,7 +933,7 @@ Extension points & best practices
 - Keep plugins isolated and testable - each plugin should be self-contained
 
 **Code organization:**
-- Add routes/handlers via plugins (recommended) or by modifying `internal/app/bootstrap.go`
+- Add routes/handlers via plugins (recommended) or by modifying `app/bootstrap.go`
 - Register middleware with explicit priority so execution order is predictable
 - Keep service layer decoupled from HTTP layer — services should accept `context.Context` and repository interfaces
 - Prefer plugin-local services initialized from `plugins.ServiceDeps` instead of extending core structs unless truly necessary
@@ -915,7 +957,7 @@ Quick file references
 ---------------------
 - Server entry: `cmd/server/main.go`
 - Console entry: `cmd/console/main.go`
-- Bootstrap: `internal/app/bootstrap.go`
+- Bootstrap: `app/bootstrap.go`
 - Admin services: `internal/admin/services/services.go`
 - Plugin loader: `internal/pluginloader/loader.go`
 - Plugin registry: `plugins/registry.go`

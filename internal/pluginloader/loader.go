@@ -5,13 +5,27 @@ import (
 	pagesplugin "github.com/rolldone/donisgo/plugins/pages"
 )
 
-// RegisterCorePlugins registers the set of core plugins supported by
-// donisgo. Dipanggil PALING AWAL (sebelum plugin user didaftarkan).
-func RegisterCorePlugins() {
-	plugins.RegisterPlugins([]plugins.Plugin{
+// corePlugins returns the set of core plugins supported by donisgo.
+// Add core plugins here (e.g. coreplugin.New()).
+func corePlugins() []plugins.Plugin {
+	return []plugins.Plugin{
 		// Add core plugins here
 		// e.g., coreplugin.New(),
-	})
+	}
+}
+
+// RegisterCorePlugins registers the set of core plugins supported by
+// donisgo into the default registry. Dipanggil PALING AWAL (sebelum plugin
+// user didaftarkan).
+//
+// Deprecated: use RegisterCorePluginsTo with an explicit registry.
+func RegisterCorePlugins() {
+	RegisterCorePluginsTo(plugins.DefaultRegistry())
+}
+
+// RegisterCorePluginsTo registers the core plugins into the given registry.
+func RegisterCorePluginsTo(registry *plugins.Registry) {
+	registry.RegisterPlugins(corePlugins())
 }
 
 // RegisterLastPlugins registers framework "bawaan" (permanent/paten) plugins
@@ -25,6 +39,14 @@ func RegisterCorePlugins() {
 //
 // ⚠️ pages adalah plugin PATEN donisgo — JANGAN dihapus. User TIDAK
 // perlu (dan tidak boleh) mendaftarkannya manual; framework yang mengurus.
+//
+// Deprecated: use RegisterLastPluginsTo with an explicit registry.
 func RegisterLastPlugins() {
-	plugins.EnsurePluginLast(pagesplugin.New())
+	RegisterLastPluginsTo(plugins.DefaultRegistry())
+}
+
+// RegisterLastPluginsTo registers the framework trailing plugins (pages) at the
+// end of the given registry.
+func RegisterLastPluginsTo(registry *plugins.Registry) {
+	registry.EnsurePluginLast(pagesplugin.New())
 }
