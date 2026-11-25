@@ -5,6 +5,29 @@ Semua perubahan penting didokumentasikan di sini. Format mengikuti
 [SemVer](https://semver.org/). Karena donisgo masih di jalur `v0.x`, perubahan
 yang tidak kompatibel dapat muncul pada bump **minor**.
 
+## [Unreleased]
+
+> Draft — nomor versi ditentukan Manager saat rilis (SPEC-004 D3).
+
+### Added
+
+- `auth.Config` dan `auth.New(cfg) (*Auth, error)` — API instans untuk paket
+  `auth`; token ditandatangani/diverifikasi per instance sehingga dua instance
+  dengan secret berbeda sepenuhnya terisolasi. `New` menolak secret kosong
+  (tanpa default insecure). TTL opsional lewat `AccessTTL`/`RefreshTTL`/
+  `ResetTTL` (nol → default 10m/14d/1h). `auth.ConfigFromEnv()` memetakan
+  variabel lingkungan lama (`AUTH_JWT_SECRET` dulu, lalu `JWT_ACCESS_SECRET`/
+  `JWT_REFRESH_SECRET`/`JWT_RESET_SECRET` + `JWT_*_EXP_SECONDS`) ke `Config`.
+  (SPEC-004 D3)
+
+### Deprecated
+
+- API package-level `auth` (`Sign*Token`, `Parse*Token`,
+  `GenerateAccessTokenWithLevel`, `ParseAccessTokenClaims`,
+  `AccessExpirySeconds` dkk.) kini wrapper ke instance default-env dan ditandai
+  `// Deprecated:`; dipertahankan hingga v1.0 (SPEC-004 D4). Perilaku lama tidak
+  berubah.
+
 ## [0.1.4] — 2026-11-25
 
 ### Fixed

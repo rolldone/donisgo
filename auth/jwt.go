@@ -2,120 +2,151 @@ package auth
 
 import (
 	"errors"
-	"os"
-	"strconv"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
+// Legacy package-level state, kept so the deprecated wrappers and the existing
+// tests keep working unchanged. New code should build an *Auth with New.
 var (
 	accessSecret  string
 	refreshSecret string
 	resetSecret   string
-	accessExp     = int(getEnvInt("JWT_ACCESS_EXP_SECONDS", 600))      // 10m
-	refreshExp    = int(getEnvInt("JWT_REFRESH_EXP_SECONDS", 1209600)) // 14d
-	resetExp      = int(getEnvInt("JWT_RESET_EXP_SECONDS", 3600))      // 1h
+	accessExp     int
+	refreshExp    int
+	resetExp      int
 )
 
 func init() {
-	// Prefer a single canonical secret if provided
-	if s := os.Getenv("AUTH_JWT_SECRET"); s != "" {
-		accessSecret = s
-		refreshSecret = s
-		resetSecret = s
-		return
-	}
+	cfg := ConfigFromEnv()
+	accessSecret = cfg.AccessSecret
+	refreshSecret = cfg.RefreshSecret
+	resetSecret = cfg.ResetSecret
+	accessExp = int(cfg.AccessTTL / time.Second)
+	refreshExp = int(cfg.RefreshTTL / time.Second)
+	resetExp = int(cfg.ResetTTL / time.Second)
+}
 
-	// Fallback to legacy separate secrets for compatibility
-	accessSecret = getEnv("JWT_ACCESS_SECRET", "change-me-access-secret")
-	refreshSecret = getEnv("JWT_REFRESH_SECRET", "change-me-refresh-secret")
-	resetSecret = getEnv("JWT_RESET_SECRET", accessSecret)
+// legacyInstance snapshots the deprecated package-level state into an *Auth.
+// It mirrors the old behaviour exactly: no secret validation, no error.
+func legacyInstance() *Auth {
+	return &Auth{
+		accessSecret:  accessSecret,
+		refreshSecret: refreshSecret,
+		resetSecret:   resetSecret,
+		accessTTL:     time.Duration(accessExp) * time.Second,
+		refreshTTL:    time.Duration(refreshExp) * time.Second,
+		resetTTL:      time.Duration(resetExp) * time.Second,
+	}
 }
 
 // AccessExpirySeconds returns configured access token lifetime in seconds.
+//
+// Deprecated: use (*Auth).AccessExpirySeconds on an instance from New.
 func AccessExpirySeconds() int {
 	return accessExp
 }
 
 // RefreshExpirySeconds returns configured refresh token lifetime in seconds.
+//
+// Deprecated: use (*Auth).RefreshExpirySeconds on an instance from New.
 func RefreshExpirySeconds() int {
 	return refreshExp
 }
 
 // ResetExpirySeconds returns configured reset token lifetime in seconds.
+//
+// Deprecated: use (*Auth).ResetExpirySeconds on an instance from New.
 func ResetExpirySeconds() int {
 	return resetExp
 }
 
-func getEnv(key, def string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return def
-}
-
-func getEnvInt(key string, def int) int {
-	if v := os.Getenv(key); v != "" {
-		if i, err := strconv.Atoi(v); err == nil {
-			return i
-		}
-	}
-	return def
-}
-
 // SignAccessToken creates a signed JWT access token for the given subject (user id).
+//
+// Deprecated: use (*Auth).SignAccessToken on an instance from New.
 func SignAccessToken(sub string) (string, error) {
-	now := time.Now().UTC()
-	claims := jwt.MapClaims{
-		"sub": sub,
-		"iat": now.Unix(),
-		"exp": now.Add(time.Duration(accessExp) * time.Second).Unix(),
-		"typ": "access",
-	}
-	t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return t.SignedString([]byte(accessSecret))
+	return legacyInstance().SignAccessToken(sub)
 }
 
 // SignRefreshToken creates a signed JWT refresh token for the given subject (user id).
+//
+// Deprecated: use (*Auth).SignRefreshToken on an instance from New.
 func SignRefreshToken(sub string) (string, error) {
-	now := time.Now().UTC()
-	claims := jwt.MapClaims{
-		"sub": sub,
-		"iat": now.Unix(),
-		"exp": now.Add(time.Duration(refreshExp) * time.Second).Unix(),
-		"typ": "refresh",
-	}
-	t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return t.SignedString([]byte(refreshSecret))
+	return legacyInstance().SignRefreshToken(sub)
 }
 
 // ParseAccessToken verifies and returns the subject from an access token.
+//
+// Deprecated: use (*Auth).ParseAccessToken on an instance from New.
 func ParseAccessToken(tokenStr string) (string, error) {
-	return parseTokenWithSecret(tokenStr, accessSecret, "access")
+	return legacyInstance().ParseAccessToken(tokenStr)
 }
 
 // ParseRefreshToken verifies and returns the subject from a refresh token.
+//
+// Deprecated: use (*Auth).ParseRefreshToken on an instance from New.
 func ParseRefreshToken(tokenStr string) (string, error) {
-	return parseTokenWithSecret(tokenStr, refreshSecret, "refresh")
+	return legacyInstance().ParseRefreshToken(tokenStr)
 }
 
 // SignResetToken creates a signed JWT reset token for the given subject (user id).
+//
+// Deprecated: use (*Auth).SignResetToken on an instance from New.
 func SignResetToken(sub string) (string, error) {
+	return legacyInstance().SignResetToken(sub)
+}
+
+// ParseResetToken verifies and returns the subject from a reset token.
+//
+// Deprecated: use (*Auth).ParseResetToken on an instance from New.
+func ParseResetToken(tokenStr string) (string, error) {
+	return legacyInstance().ParseResetToken(tokenStr)
+}
+
+// SignAccessToken creates a signed JWT access token for the given subject (user id).
+func (a *Auth) SignAccessToken(sub string) (string, error) {
+	return a.sign(a.accessSecret, sub, "access", a.accessTTL)
+}
+
+// SignRefreshToken creates a signed JWT refresh token for the given subject (user id).
+func (a *Auth) SignRefreshToken(sub string) (string, error) {
+	return a.sign(a.refreshSecret, sub, "refresh", a.refreshTTL)
+}
+
+// SignResetToken creates a signed JWT reset token for the given subject (user id).
+func (a *Auth) SignResetToken(sub string) (string, error) {
+	return a.sign(a.resetSecret, sub, "reset", a.resetTTL)
+}
+
+func (a *Auth) sign(secret, sub, typ string, ttl time.Duration) (string, error) {
+	if secret == "" {
+		return "", errors.New("jwt secret is empty")
+	}
 	now := time.Now().UTC()
 	claims := jwt.MapClaims{
 		"sub": sub,
 		"iat": now.Unix(),
-		"exp": now.Add(time.Duration(resetExp) * time.Second).Unix(),
-		"typ": "reset",
+		"exp": now.Add(ttl).Unix(),
+		"typ": typ,
 	}
 	t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return t.SignedString([]byte(resetSecret))
+	return t.SignedString([]byte(secret))
+}
+
+// ParseAccessToken verifies and returns the subject from an access token.
+func (a *Auth) ParseAccessToken(tokenStr string) (string, error) {
+	return parseTokenWithSecret(tokenStr, a.accessSecret, "access")
+}
+
+// ParseRefreshToken verifies and returns the subject from a refresh token.
+func (a *Auth) ParseRefreshToken(tokenStr string) (string, error) {
+	return parseTokenWithSecret(tokenStr, a.refreshSecret, "refresh")
 }
 
 // ParseResetToken verifies and returns the subject from a reset token.
-func ParseResetToken(tokenStr string) (string, error) {
-	return parseTokenWithSecret(tokenStr, resetSecret, "reset")
+func (a *Auth) ParseResetToken(tokenStr string) (string, error) {
+	return parseTokenWithSecret(tokenStr, a.resetSecret, "reset")
 }
 
 func parseTokenWithSecret(tokenStr, secret, expectType string) (string, error) {
