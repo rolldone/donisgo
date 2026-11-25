@@ -17,3 +17,6 @@ sub_app/webapp/tsconfig.tsbuildinfo
 
 # Historic (work-memory, local-only)
 .historic/
+
+# Example module build output
+examples/library/donisgo-library-demo
