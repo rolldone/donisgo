@@ -386,6 +386,13 @@ Deployment tips:
 CORS
 - `CORS_ALLOWED_ORIGINS`="http://localhost:5173,http://localhost:4321" — comma-separated list of allowed origins
 
+Trusted proxies (ClientIP)
+- `TRUSTED_PROXIES`="10.0.0.0/8,172.16.0.5" — comma-separated list of IPs/CIDRs allowed to set `X-Forwarded-For` / `X-Real-IP`; gin uses them to resolve `ClientIP()`.
+- **Empty (default) = trust no proxy**: forwarded headers are ignored and `ClientIP()` returns the socket peer. This is the safe default — gin's own default ("trust every proxy") let any client spoof its IP (issue #3).
+- **Required when running behind a reverse proxy** (nginx, caddy, traefik, NPM). If unset there, `ClientIP()` reports the proxy's address instead of the real client, so IP-based rate limits and audit logs are useless.
+- Invalid entries are rejected with a `[WARNING]` log line and the whole list falls back to trust-none; startup never fails because of this variable.
+- Programmatic override: `app.Config.TrustedProxies` wins over the env var (`nil` → env, explicit empty → trust none).
+
 Logging
 - `LOG_LEVEL`=debug|info|warn|error
 
@@ -993,7 +1000,7 @@ application, err := app.New(app.Config{
    // KeyDB: keydbClient,     // nil → keydb.New from KEYDB_* env
    // Mail:  mailer,          // nil → mail.NewMailer()
    // CORS:  &cors.Config{},  // nil → CORS_ALLOWED_ORIGINS behaviour
-   // TrustedProxies: []string{"10.0.0.0/8"}, // empty → gin default (trust all)
+   // TrustedProxies: []string{"10.0.0.0/8"}, // nil → TRUSTED_PROXIES env; empty → trust none
 
    Plugins: []plugins.Plugin{myplugin.New()},
 })

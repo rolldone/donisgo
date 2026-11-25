@@ -131,6 +131,25 @@ func clientIPFor(t *testing.T, proxies []string, remoteAddr, xff string) string 
 	if err := configureTrustedProxies(r, proxies); err != nil {
 		t.Fatalf("configureTrustedProxies(%v): %v", proxies, err)
 	}
+	return clientIPOn(t, r, remoteAddr, xff)
+}
+
+// clientIPFromConfig builds the engine through the same resolver New uses (so
+// TRUSTED_PROXIES is honoured) and reports gin's ClientIP for the request.
+func clientIPFromConfig(t *testing.T, cfg Config, remoteAddr, xff string) string {
+	t.Helper()
+
+	r := gin.New()
+	if err := configureTrustedProxies(r, resolveTrustedProxies(cfg)); err != nil {
+		t.Fatalf("configureTrustedProxies(resolveTrustedProxies(%+v)): %v", cfg, err)
+	}
+	return clientIPOn(t, r, remoteAddr, xff)
+}
+
+// clientIPOn serves one request against r and returns what gin reports as the
+// client IP.
+func clientIPOn(t *testing.T, r *gin.Engine, remoteAddr, xff string) string {
+	t.Helper()
 
 	var got string
 	r.GET("/ip", func(c *gin.Context) {
@@ -147,14 +166,92 @@ func clientIPFor(t *testing.T, proxies []string, remoteAddr, xff string) string 
 	return got
 }
 
-// TestConfigureTrustedProxies_EmptyLeavesGinDefault asserts the phase-4
-// refactor does not change gin's proxy behaviour: with no trusted-proxy list,
-// gin keeps trusting all proxies (XFF is honoured).
-func TestConfigureTrustedProxies_EmptyLeavesGinDefault(t *testing.T) {
+// TestConfigureTrustedProxies_EmptyTrustsNoProxy asserts the security default:
+// with no trusted-proxy list, gin must NOT honour X-Forwarded-For (it used to
+// leave gin's "trust all proxies" default in place, which let clients spoof
+// their IP — issue #3).
+func TestConfigureTrustedProxies_EmptyTrustsNoProxy(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	if got := clientIPFor(t, nil, "203.0.113.5:1234", "1.2.3.4"); got != "1.2.3.4" {
-		t.Fatalf("expected gin default (trust all) to honour XFF, got %q", got)
+	if got := clientIPFor(t, nil, "203.0.113.5:1234", "1.2.3.4"); got != "203.0.113.5" {
+		t.Fatalf("empty list must trust no proxy: got %q, want RemoteAddr 203.0.113.5", got)
+	}
+}
+
+// TestSpoofing_XFFIgnoredWithoutTrust is scenario (a): a forged X-Forwarded-For
+// from an untrusted peer must not change ClientIP.
+func TestSpoofing_XFFIgnoredWithoutTrust(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Setenv("TRUSTED_PROXIES", "")
+
+	for _, xff := range []string{"1.2.3.4", "1.2.3.4, 5.6.7.8", "not-an-ip"} {
+		got := clientIPFromConfig(t, Config{}, "203.0.113.5:1234", xff)
+		if got != "203.0.113.5" {
+			t.Errorf("XFF %q spoofed the client IP: got %q, want 203.0.113.5", xff, got)
+		}
+	}
+}
+
+// TestSpoofing_TrustedProxyHonoursXFF is scenario (b): once the peer is a
+// trusted proxy, its X-Forwarded-For is the real client IP.
+func TestSpoofing_TrustedProxyHonoursXFF(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Setenv("TRUSTED_PROXIES", "10.0.0.0/8, 172.16.0.5")
+
+	if got := clientIPFromConfig(t, Config{}, "10.1.2.3:1234", "1.2.3.4"); got != "1.2.3.4" {
+		t.Errorf("trusted proxy: got %q, want 1.2.3.4 (XFF honoured)", got)
+	}
+	// A peer outside the trusted set still cannot spoof.
+	if got := clientIPFromConfig(t, Config{}, "203.0.113.5:1234", "1.2.3.4"); got != "203.0.113.5" {
+		t.Errorf("untrusted peer: got %q, want 203.0.113.5 (XFF ignored)", got)
+	}
+}
+
+// TestSpoofing_InvalidEnvFallsBackToTrustNone is scenario (c): a malformed
+// TRUSTED_PROXIES value must not stop the app nor widen trust — it degrades to
+// trust-none, so XFF spoofing still fails.
+func TestSpoofing_InvalidEnvFallsBackToTrustNone(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	for _, raw := range []string{"not-an-ip", "10.0.0.0/8,bogus", "10.0.0.0/99"} {
+		t.Setenv("TRUSTED_PROXIES", raw)
+		if got := resolveTrustedProxies(Config{}); got != nil {
+			t.Errorf("TRUSTED_PROXIES=%q: expected nil (trust-none), got %v", raw, got)
+		}
+		if got := clientIPFromConfig(t, Config{}, "203.0.113.5:1234", "1.2.3.4"); got != "203.0.113.5" {
+			t.Errorf("TRUSTED_PROXIES=%q allowed XFF spoofing: got %q", raw, got)
+		}
+	}
+}
+
+// TestResolveTrustedProxies_FromEnv asserts a valid comma-separated value is
+// parsed, trimmed and wired through.
+func TestResolveTrustedProxies_FromEnv(t *testing.T) {
+	t.Setenv("TRUSTED_PROXIES", " 10.0.0.0/8 , 172.16.0.5 ,,::1 ")
+
+	got := resolveTrustedProxies(Config{})
+	want := []string{"10.0.0.0/8", "172.16.0.5", "::1"}
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("got %v, want %v", got, want)
+		}
+	}
+}
+
+// TestResolveTrustedProxies_ExplicitConfigWins asserts Config.TrustedProxies
+// takes precedence over the environment, including an explicit empty slice
+// (which must mean trust-none, not "fall back to env").
+func TestResolveTrustedProxies_ExplicitConfigWins(t *testing.T) {
+	t.Setenv("TRUSTED_PROXIES", "10.0.0.0/8")
+
+	if got := resolveTrustedProxies(Config{TrustedProxies: []string{"192.168.0.0/16"}}); len(got) != 1 || got[0] != "192.168.0.0/16" {
+		t.Errorf("explicit config must win, got %v", got)
+	}
+	if got := resolveTrustedProxies(Config{TrustedProxies: []string{}}); len(got) != 0 {
+		t.Errorf("explicit empty slice must mean trust-none, got %v", got)
 	}
 }
 
