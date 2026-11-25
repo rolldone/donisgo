@@ -236,7 +236,6 @@ What's NOT included (implement via plugins)
 Main components
 ---------------
 - Bootstrap & wiring: `app/bootstrap.go`
-- Business services: `internal/admin/services`
 - Database (GORM): `db/gorm.go`
 - Auth utilities (JWT): `auth` (token generation/verification helpers)
 - Plugin system: `internal/pluginloader` and `plugins`
@@ -372,7 +371,7 @@ Creating the public storage URL
 When serving files (images, product assets, business assets) the application exposes public URLs that point to the storage location. Configure `STORAGE_PUBLIC_URL` so generated links (e.g. in APIs and emails) resolve correctly.
 
 Guidelines:
-- Local storage: when `STORAGE_DRIVER=local` and the app serves `/assets` (see plugin `catalog` which registers static routes), set `STORAGE_PUBLIC_URL` to your server base + `/assets`, e.g. `http://localhost:8080/assets` or `https://example.com/assets`.
+- Local storage: when `STORAGE_DRIVER=local` and a plugin serves `/assets` via static routes (see "Serving local storage from a plugin" below), set `STORAGE_PUBLIC_URL` to your server base + `/assets`, e.g. `http://localhost:8080/assets` or `https://example.com/assets`.
 - S3 (or other object storage): set `STORAGE_PUBLIC_URL` to the public bucket endpoint or CDN fronting the bucket, e.g. `https://my-bucket.s3.eu-west-1.amazonaws.com` or `https://cdn.example.com`.
 - Trailing slash: avoid a trailing slash to keep URL joins predictable (the code appends paths like `/products/...`).
 
@@ -430,7 +429,7 @@ This framework provides JWT utilities but does not include built-in authenticati
 JWT utilities available (`auth`)
 -----------------------------------------
 
-**Basic JWT functions** (`jwt.go`):
+**Basic JWT functions** (`auth/jwt.go`):
 ```go
 // Generate tokens
 token, err := auth.SignAccessToken(userID)       // Generate access token
@@ -445,7 +444,7 @@ accessExp := auth.AccessExpirySeconds()   // e.g., 900 (15 minutes)
 refreshExp := auth.RefreshExpirySeconds() // e.g., 1209600 (14 days)
 ```
 
-**Advanced JWT with custom claims** (`claims_tokens.go`):
+**Advanced JWT with custom claims** (`auth/claims_tokens.go`):
 ```go
 // Generate token with admin_id and level claims
 token, expTime, err := auth.GenerateAccessTokenWithLevel(
@@ -599,7 +598,7 @@ func TestJWTWithClaims(t *testing.T) {
 ```
 
 Testing
-- Unit-test auth-related logic by mocking token generation/verification helpers. Look at `mail/mailer_test.go` for examples of structure and patterns.
+- Unit-test auth-related logic by mocking token generation/verification helpers. Look at `mail/mail_test.go` for examples of structure and patterns.
 
 DB
 --
@@ -624,7 +623,7 @@ Transactions & context
 - Avoid long-lived DB transactions across user-facing requests; keep transactions short and deterministic.
 
 Migrations
-- SQL/Go migrations live in the `migrations/` directory. Migration helper and CLI integration are available under `console/migrate.go`.
+- SQL/Go migrations live in the `migrations/` directory (created on demand by `go run ./cmd/console migrate make <name>`; not shipped in the repo). Migration helper and CLI integration are available under `console/migrate.go`.
 - Run migrations locally via the console CLI. Example (from repo root):
 
 ```bash
@@ -804,8 +803,9 @@ Built-in plugins (permanent — jangan dihapus)
 donisgo memiliki plugin "bawaan"/paten yang otomatis didaftarkan oleh
 framework — user TIDAK perlu (dan tidak boleh) mendaftarkannya manual:
 
-- **`pages`** (`plugins/pages/plugin.go`) — melayani SPA dari
-  `./sub_app/webapp/dist`, wildcard/catch-all via `router.NoRoute`, dan proxy
+- **`pages`** (`plugins/pages/plugin.go`) — melayani SPA dari direktori hasil
+  build frontend `./sub_app/webapp/dist` (tidak ada di repo; dibuat oleh build
+  Vite/production), wildcard/catch-all via `router.NoRoute`, dan proxy
   homepage opsional (`HOMEPAGE_URL`). Selalu di-register **PALING AKHIR** oleh
   `pluginloader.RegisterLastPlugins()`:
   - Server: dipanggil dari `app/bootstrap.go` (`attachPlugins`)
@@ -823,7 +823,7 @@ Plugin Registry (komunikasi antar plugin)
 `plugins/plugin_registry` menyediakan mekanisme berbagi interface fungsi antar
 plugin tanpa circular import:
 
-1. Definisikan interface contract di `plugin_registry/registry.go`
+1. Definisikan interface contract di `plugins/plugin_registry/registry.go`
    (mis. `ChatProvider`).
 2. Plugin **PROVIDER** mendaftarkan implementasinya via `Register<X>Provider(...)`
    di `RegisterServices(deps)`.
@@ -866,7 +866,7 @@ go run ./cmd/console plugin new --id my-plugin --no-console
 **Generated structure:**
 - `plugins/my_plugin/plugin.go` - main plugin file implementing `plugins.Plugin` interface
 - `plugins/my_plugin/handlers/` - HTTP handler files (health.go, resource.go, etc.)
-- `plugins/my_plugin/migrations/postgres/` - migration files (000001_init.up.sql, 000001_init.down.sql)
+- `plugins/my_plugin/migrations/postgres/` - migration files (`<timestamp>_init.up.sql`, `<timestamp>_init.down.sql`)
 - `plugins/my_plugin/services/` - service layer (CRUD template only)
 - `plugins/my_plugin/middleware/` - middleware implementations (middleware template only)
 
@@ -926,7 +926,7 @@ func main() {
 
 4. Place DB migrations under `plugins/<plugin_id>/migrations/<db_type>` if needed (e.g., `plugins/myplugin/migrations/postgres/`).
 
-Minimal plugin skeleton (example file: `plugins/myplugin/plugin.go`):
+Minimal plugin skeleton (create this as, e.g., `plugins/myplugin/plugin.go`):
 
 ```go
 package myplugin
@@ -964,7 +964,7 @@ func (p *MyPlugin) RegisterRoutes(router *gin.Engine, admin *gin.RouterGroup, ap
 
 Serving local storage from a plugin
 ----------------------------------
-If you want a plugin to register static routes that serve files from the local storage root (same approach used in `plugins/catalog`), add the following check inside `RegisterRoutes`. It uses the `Store` instance provided in `RegisterServices` and only registers the routes when the store is a `*storage.LocalStore`:
+If you want a plugin to register static routes that serve files from the local storage root, add the following check inside `RegisterRoutes`. It uses the `Store` instance provided in `RegisterServices` and only registers the routes when the store is a `*storage.LocalStore`:
 
 ```go
 func (p *Plugin) RegisterRoutes(router *gin.Engine, admin *gin.RouterGroup, api *gin.RouterGroup) error {
@@ -972,7 +972,7 @@ func (p *Plugin) RegisterRoutes(router *gin.Engine, admin *gin.RouterGroup, api 
       return fmt.Errorf("myplugin: service not registered")
    }
 
-   // Jika storage lokal aktif, daftarkan static routes mirip catalog
+   // Jika storage lokal aktif, daftarkan static routes
    if localStore, ok := p.service.Store.(*storage.LocalStore); ok {
       router.Static("/assets/products", localStore.GetRoot()+"/products")
       router.Static("/assets/businesses", localStore.GetRoot()+"/businesses")
@@ -980,7 +980,7 @@ func (p *Plugin) RegisterRoutes(router *gin.Engine, admin *gin.RouterGroup, api 
 }
 ```
 
-Place this code in your plugin's `RegisterRoutes` so the application serves `/assets/*` paths from the configured `STORAGE_ROOT` when using local storage. This keeps the behavior identical to the catalog plugin and avoids touching core bootstrap code.
+Place this code in your plugin's `RegisterRoutes` so the application serves `/assets/*` paths from the configured `STORAGE_ROOT` when using local storage. This keeps storage URL handling inside the plugin and avoids touching core bootstrap code.
 
 ```
 func (p *MyPlugin) Seed() error { return nil }
@@ -1094,7 +1094,7 @@ Extension points & best practices
 - Use the transaction helper `db.WithTransaction()` in `db/tx.go` to simplify error handling
 
 **Testing:**
-- Mock DB and services for unit testing; see `mail/mailer_test.go` for example patterns
+- Mock DB and services for unit testing; see `mail/mail_test.go` for example patterns
 - Test plugins in isolation by providing test `*gorm.DB` and, when needed, a fake `storage.Store`
 - Use `go run ./cmd/console migrate --db <type> up` to run migrations in test databases
 
@@ -1108,7 +1108,6 @@ Quick file references
 - Server entry: `cmd/server/main.go`
 - Console entry: `cmd/console/main.go`
 - Bootstrap: `app/bootstrap.go`
-- Admin services: `internal/admin/services/services.go`
 - Plugin loader: `internal/pluginloader/loader.go`
 - Plugin registry: `plugins/registry.go`
 - Plugin types: `plugins/types.go`
@@ -1138,7 +1137,7 @@ flowchart LR
 
    MWChain --> Core --> Auth --> PluginMW --> Handler[Handler]
 
-   Handler --> Service[Service layer: internal/*/services]
+   Handler --> Service[Service layer: your plugin's services]
    Service --> DB[GORM (db)]
    DB --> Service
    Service --> Handler
