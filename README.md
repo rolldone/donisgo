@@ -94,19 +94,19 @@ Main components
 ---------------
 - Bootstrap & wiring: `internal/app/bootstrap.go`
 - Business services: `internal/admin/services`
-- Database (GORM): `internal/db/gorm.go`
+- Database (GORM): `db/gorm.go`
 - Auth utilities (JWT): `auth` (token generation/verification helpers)
 - Plugin system: `internal/pluginloader` and `internal/plugins`
 - CLI / migrations: `internal/console`
 - Mailer: `mail`
-- KeyDB/Redis client: `internal/keydb`
+- KeyDB/Redis client: `keydb`
 - Storage abstraction: `storage`
-- Events: `internal/events`
+- Events: `events`
 - UUID v7 generator: `uuid`
 
 Events
 ------
-A lightweight internal event bus is provided by `internal/events`. Handlers are invoked asynchronously in separate goroutines by default. Use `Subscribe` to register a handler (it returns an unsubscribe function) and `Publish` to emit events.
+A lightweight internal event bus is provided by `events`. Handlers are invoked asynchronously in separate goroutines by default. Use `Subscribe` to register a handler (it returns an unsubscribe function) and `Publish` to emit events.
 
 Example:
 
@@ -122,11 +122,11 @@ defer unsub()
 events.Publish("user.created", map[string]interface{}{"id": "user123"})
 ```
 
-See `internal/events/events_example_test.go` for a runnable test demonstrating Subscribe/Publish.
+See `events/events_example_test.go` for a runnable test demonstrating Subscribe/Publish.
 
 Request–Reply (safe pattern)
 ---------------------------
-For synchronous data-sync between plugins the repo provides a helper `RequestReply` in `internal/events`.
+For synchronous data-sync between plugins the repo provides a helper `RequestReply` in `events`.
 It creates a unique reply topic for each request, publishes the request with a `ReplyTo` field, and waits (with timeout) for a single reply.
 
 Key properties:
@@ -134,7 +134,7 @@ Key properties:
 - Caller supplies a timeout and context for cancellation.
 - Subscribers must read `ReplyTo` from the request and publish their response to that topic.
 
-See `internal/events/request_reply.go` and `internal/events/request_reply_test.go` for a concrete example with concurrent requesters.
+See `events/request_reply.go` and `events/request_reply_test.go` for a concrete example with concurrent requesters.
 
 Cancellation / Deadline pattern
 -------------------------------
@@ -453,7 +453,7 @@ Testing
 
 DB
 --
-This project uses GORM (see `internal/db/gorm.go`) as the primary ORM. Below are connection, pooling, and migration notes to help setup and operate the database safely.
+This project uses GORM (see `db/gorm.go`) as the primary ORM. Below are connection, pooling, and migration notes to help setup and operate the database safely.
 
 Connection
 - DSN is composed from environment variables (`DB_TYPE`, `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_SSLMODE`). Example Postgres DSN format:
@@ -462,8 +462,8 @@ Connection
 host=localhost port=5432 user=postgres dbname=app_db password=secret sslmode=disable
 ```
 
-- The connection is created in `internal/db/gorm.go`; prefer injecting the DB instance into services rather than using a global variable.
- - Transaction helper: see `internal/db/tx.go` for `WithTransaction(ctx, gdb, fn)` which simplifies begin/commit/rollback patterns.
+- The connection is created in `db/gorm.go`; prefer injecting the DB instance into services rather than using a global variable.
+ - Transaction helper: see `db/tx.go` for `WithTransaction(ctx, gdb, fn)` which simplifies begin/commit/rollback patterns.
 
 Pooling & tuning
 - Recommended env vars: `DB_MAX_OPEN_CONNS`, `DB_MAX_IDLE_CONNS`, `DB_CONN_MAX_LIFETIME_SEC`. Tune based on workload and connection limits of your DB server.
@@ -610,7 +610,7 @@ Notes & best practices
 - Handle panics and ensure `Rollback()` is called unless `Commit()` succeeded.
 - For read-only handlers that do not need transactions, use the shared DB dependency directly (for example `deps.DB`) without `Begin()`.
 Helper utility
-- `internal/db/tx.go` exposes `WithTransaction(ctx, gdb, fn)` which wraps begin/commit/rollback and panic handling. Use it to simplify handlers:
+- `db/tx.go` exposes `WithTransaction(ctx, gdb, fn)` which wraps begin/commit/rollback and panic handling. Use it to simplify handlers:
 
 ```go
 err := db.WithTransaction(ctx, deps.DB, func(tx *gorm.DB) error {
@@ -873,7 +873,7 @@ Request flow (execution order)
    - Note: Authentication middleware is NOT included by default — implement in a plugin
 4. After middleware, the matched handler runs (plugin-registered handlers or custom handlers).
 5. Handler calls into plugin services or custom code for business logic, DB interactions, storage, or cache usage.
-6. Shared dependencies come from bootstrap: GORM (`internal/db/gorm.go`), storage (`storage`), and optional KeyDB (`internal/keydb`).
+6. Shared dependencies come from bootstrap: GORM (`db/gorm.go`), storage (`storage`), and optional KeyDB (`keydb`).
 7. Handler serializes the response (JSON/HTML) and returns it to the client.
 8. Plugin hooks or response middleware may modify the response before it is sent.
 
@@ -899,7 +899,7 @@ Extension points & best practices
 **Database & transactions:**
 - Use `context.Context` to pass request identity and cancellation signals into services
 - Pass `*gorm.DB` transactions explicitly to service methods (see Transactions & context patterns section)
-- Use the transaction helper `db.WithTransaction()` in `internal/db/tx.go` to simplify error handling
+- Use the transaction helper `db.WithTransaction()` in `db/tx.go` to simplify error handling
 
 **Testing:**
 - Mock DB and services for unit testing; see `mail/mailer_test.go` for example patterns
@@ -920,13 +920,13 @@ Quick file references
 - Plugin loader: `internal/pluginloader/loader.go`
 - Plugin registry: `internal/plugins/registry.go`
 - Plugin types: `internal/plugins/types.go`
-- DB (GORM): `internal/db/gorm.go`
-- DB transactions: `internal/db/tx.go`
+- DB (GORM): `db/gorm.go`
+- DB transactions: `db/tx.go`
 - Auth utilities (JWT): `auth/jwt.go`
 - Storage: `storage/config.go`
 - Console commands: `internal/console/`
 - Mailer: `mail/mailer.go`
-- KeyDB client: `internal/keydb/client.go`
+- KeyDB client: `keydb/client.go`
 
 Request Flow Diagram
 --------------------
@@ -947,7 +947,7 @@ flowchart LR
    MWChain --> Core --> Auth --> PluginMW --> Handler[Handler]
 
    Handler --> Service[Service layer: internal/*/services]
-   Service --> DB[GORM (internal/db)]
+   Service --> DB[GORM (db)]
    DB --> Service
    Service --> Handler
 

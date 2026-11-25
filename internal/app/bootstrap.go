@@ -17,10 +17,10 @@ import (
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 
-	"github.com/rolldone/donisgo/internal/db"
-	"github.com/rolldone/donisgo/internal/keydb"
+	"github.com/rolldone/donisgo/db"
 	"github.com/rolldone/donisgo/internal/pluginloader"
 	"github.com/rolldone/donisgo/internal/plugins"
+	"github.com/rolldone/donisgo/keydb"
 	"github.com/rolldone/donisgo/storage"
 
 	"gorm.io/gorm"
@@ -49,11 +49,18 @@ type App struct {
 	frontGroup *gin.RouterGroup
 	gdb        *gorm.DB
 	store      storage.Store
+	keydb      *keydb.Client
 }
 
 // New assembles the application: DB, services, routes, plugins, swagger.
 func New(opts Options) (*App, error) {
-	gdb, err := db.GetGormDB()
+	// Database: bootstrap is still env-driven (full app.Config is Fase 4), but
+	// the connection itself now comes from the explicit-instance db.Open API.
+	dbCfg, err := db.ConfigFromEnv()
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to database: %w", err)
+	}
+	gdb, err := db.Open(dbCfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
@@ -70,6 +77,7 @@ func New(opts Options) (*App, error) {
 	}
 
 	// Initialize KeyDB for flash messages (non-fatal if unavailable)
+	var keydbClient *keydb.Client
 	keydbHost := os.Getenv("KEYDB_HOST")
 	keydbPort := os.Getenv("KEYDB_PORT")
 	keydbPass := os.Getenv("KEYDB_PASS")
@@ -81,8 +89,16 @@ func New(opts Options) (*App, error) {
 		}
 	}
 	if keydbHost != "" && keydbPort != "" {
-		if err := keydb.Init(keydbHost, keydbPort, keydbPass, keydbDB); err != nil {
+		c, err := keydb.New(keydb.Config{
+			Host:     keydbHost,
+			Port:     keydbPort,
+			Password: keydbPass,
+			DB:       keydbDB,
+		})
+		if err != nil {
 			log.Printf("[WARNING] KeyDB init failed (flash messages unavailable): %v", err)
+		} else {
+			keydbClient = c
 		}
 	} else {
 		log.Println("[INFO] KeyDB not configured (KEYDB_HOST/PORT missing), flash messages disabled")
@@ -215,6 +231,7 @@ func New(opts Options) (*App, error) {
 		frontGroup: apiGroup,
 		gdb:        gdb,
 		store:      store,
+		keydb:      keydbClient,
 	}
 
 	app.registerAdminRoutes()

@@ -8,11 +8,13 @@ import (
 	"time"
 )
 
-// RequestReply publishes a request event and waits for a single reply.
-// It creates a unique reply topic and includes it in the published payload under key "ReplyTo".
-// Subscribers should publish the response to that reply topic. The call blocks until a
-// reply arrives, the context is cancelled, or the timeout elapses.
-func RequestReply(ctx context.Context, requestEvent string, payload interface{}, timeout time.Duration) (interface{}, error) {
+// RequestReply publishes a request event on this Bus and waits for a single
+// reply.
+// It creates a unique reply topic and includes it in the published payload
+// under key "ReplyTo". Subscribers should publish the response to that reply
+// topic. The call blocks until a reply arrives, the context is cancelled, or
+// the timeout elapses.
+func (b *Bus) RequestReply(ctx context.Context, requestEvent string, payload interface{}, timeout time.Duration) (interface{}, error) {
 	// generate unique reply topic
 	id, err := genID(12)
 	if err != nil {
@@ -22,7 +24,7 @@ func RequestReply(ctx context.Context, requestEvent string, payload interface{},
 
 	// subscribe to reply topic
 	ch := make(chan interface{}, 1)
-	unsub := Subscribe(replyTopic, func(_ctx context.Context, p interface{}) {
+	unsub := b.Subscribe(replyTopic, func(_ctx context.Context, p interface{}) {
 		select {
 		case ch <- p:
 		default:
@@ -45,7 +47,7 @@ func RequestReply(ctx context.Context, requestEvent string, payload interface{},
 	}
 
 	// publish request
-	Publish(requestEvent, req)
+	b.Publish(requestEvent, req)
 
 	// wait for reply, context cancel, or timeout
 	timer := time.NewTimer(timeout)
@@ -58,6 +60,15 @@ func RequestReply(ctx context.Context, requestEvent string, payload interface{},
 	case r := <-ch:
 		return r, nil
 	}
+}
+
+// RequestReply publishes a request event and waits for a single reply.
+//
+// Deprecated: create a Bus with NewBus and call its RequestReply method. This
+// wrapper delegates to a package-level default bus and is kept until v1.0 so
+// existing scaffolds keep working.
+func RequestReply(ctx context.Context, requestEvent string, payload interface{}, timeout time.Duration) (interface{}, error) {
+	return defaultBus.RequestReply(ctx, requestEvent, payload, timeout)
 }
 
 func genID(n int) (string, error) {

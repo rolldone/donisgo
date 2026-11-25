@@ -102,7 +102,7 @@ func TestPluginTemplates_UseModulePath(t *testing.T) {
 			name: "events",
 			got:  pluginEventsTemplate(pkgName, id, mod),
 			want: []string{
-				`"example.com/historic_service/internal/events"`,
+				`"example.com/historic_service/events"`,
 				`log.Printf("plugin my-plugin: received user.created payload type=%T", payload)`,
 			},
 		},
