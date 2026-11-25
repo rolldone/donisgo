@@ -5,6 +5,14 @@ Semua perubahan penting didokumentasikan di sini. Format mengikuti
 [SemVer](https://semver.org/). Karena donisgo masih di jalur `v0.x`, perubahan
 yang tidak kompatibel dapat muncul pada bump **minor**.
 
+## [0.1.3] — 2026-11-25
+
+### Added
+
+- `CHANGELOG.md` (file ini) + section "Versioning & releases" di README:
+  panduan pin versi (`go get ...@v0.1.2`), caveat breaking change pada bump
+  minor jalur `v0.x`, dan rujukan ke tag GitHub. (PR #12, commit 934902c)
+
 ## [0.1.2] — 2026-11-25
 
 ### Changed
