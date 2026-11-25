@@ -1,6 +1,7 @@
 # SPEC-005 — donisgo Pure Library: pemisahan starter & tooling ke `donisgo-template`
 
-- Status    : **DRAFT** — menunggu persetujuan pemilik (Open Questions §7)
+- Status    : **APPROVED** — disetujui pemilik 2026-11-25 (seluruh OQ §7
+              ikut rekomendasi Manager)
 - Tanggal   : 2026-11-25
 - Pengusul  : Manager (donis-agent) atas rencana pemilik
 - Target    : donisgo `v0.2.0` (BREAKING, jalur v0.x) + lahirnya
@@ -130,15 +131,17 @@ Gerbang kualitas tiap fase (kedua repo): `gofmt -l .` kosong, `go vet ./...`,
       donisgo versi pinned.
 - [ ] README kedua repo saling merujuk (peta ekosistem).
 - [ ] Tag: donisgo `v0.2.0`, donisgo-template `v0.1.0`.
+- [ ] LICENSE (MIT) ada di kedua repo.
 
-## 7. Open Questions (butuh jawaban pemilik)
+## 7. Keputusan Open Questions (disetujui pemilik 2026-11-25)
 
-- **OQ-1** — Skeleton awal repo template (README + .gitignore, commit
-  `a41c336`) disetujui sebagai titik mulai? (rekomendasi: ya — akan terisi
-  saat fase 2–5)
-- **OQ-2** — LICENSE: donisgo saat ini **tidak punya** file LICENSE. Tambahkan
-  (mis. MIT) di kedua repo sebelum ekosistem makin dipakai? (rekomendasi: ya)
-- **OQ-3** — `plugin new` dipindah utuh dulu, refactor menyusul jika perlu?
-  (rekomendasi: ya — pindah dulu, jangan campur refactor)
-- **OQ-4** — Layout template mengikuti donisgo (`plugins/pages`, `cmd/*` di
-  path yang sama)? (rekomendasi: ya — diff pemindahan minimal)
+Seluruh OQ mengikuti rekomendasi Manager:
+
+- **OQ-1** — Skeleton awal repo template (`a41c336`) ✅ disetujui sebagai titik
+  mulai; terisi penuh saat fase 2–5.
+- **OQ-2** — LICENSE ✅ MIT di kedua repo (donisgo + donisgo-template), holder
+  Donny Rolanda; dieksekusi Manager bersama finalisasi spec ini.
+- **OQ-3** — `plugin new` ✅ dipindah utuh dulu (fase 3); refactor menyusul
+  jika perlu — jangan dicampur dalam satu fase.
+- **OQ-4** — Layout template ✅ mengikuti donisgo (`plugins/pages`, `cmd/*`
+  path sama) — diff pemindahan minimal.
