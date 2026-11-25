@@ -3,7 +3,7 @@ package main
 import (
 	"syscall"
 
-	"github.com/rolldone/donisgo/internal/console"
+	"github.com/rolldone/donisgo/console"
 )
 
 func main() {
