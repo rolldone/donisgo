@@ -9,6 +9,7 @@ Table of contents
 -----------------
 - Overview
 - Quick Start
+- Using donisgo as a library
 - What's included
 - What's NOT included (implement via plugins)
 - Main components
@@ -64,6 +65,132 @@ go run ./cmd/console plugin new --id my-plugin
 The plugin generator creates an initial migration with a timestamp prefix, in the same style as Laravel: `YYYY_MM_DD_HHMMSS_name.up.sql` and `YYYY_MM_DD_HHMMSS_name.down.sql`.
 
 See sections below for more details.
+
+Using donisgo as a library
+--------------------------
+Since SPEC-004 the framework's core packages live at the module root, so any Go
+module can import them directly:
+
+```bash
+go get github.com/rolldone/donisgo
+```
+
+**Public packages**
+
+| Package | Import path | What you get |
+|---|---|---|
+| app | `github.com/rolldone/donisgo/app` | `app.Config`, `app.New`, `app.NewFromEnv`, `(*App).Run` |
+| plugins | `github.com/rolldone/donisgo/plugins` | `Plugin` contract, `ServiceDeps`, `MiddlewareDescriptor`, `Registry`, priority constants |
+| db | `github.com/rolldone/donisgo/db` | `db.Open(db.Config{...})`, `WithTransaction` |
+| events | `github.com/rolldone/donisgo/events` | `events.NewBus()` publish/subscribe + request/reply |
+| keydb | `github.com/rolldone/donisgo/keydb` | `keydb.New(cfg)` → `*Client` (flash messages, raw Redis) |
+| storage | `github.com/rolldone/donisgo/storage` | `Store` interface, `Config`, `NewStore` |
+| mail | `github.com/rolldone/donisgo/mail` | `Mailer`, `Mailable`, `SMTPConfig`, `NewMailerWithConfig` |
+| auth | `github.com/rolldone/donisgo/auth` | JWT sign/parse helpers |
+| secrets | `github.com/rolldone/donisgo/secrets` | `EncryptBlob` / `DecryptBlob` |
+| uuid | `github.com/rolldone/donisgo/uuid` | `uuid.New()` UUIDv7 generator |
+
+Only `internal/console` (CLI tooling) and `internal/pluginloader` (framework
+plugin wiring) remain under `internal/` — they are implementation details, not
+library API.
+
+**Quickstart: wiring an app**
+
+```go
+package main
+
+import (
+    "log"
+
+    "github.com/rolldone/donisgo/app"
+    "github.com/rolldone/donisgo/plugins"
+    myplugin "github.com/rolldone/donisgo/plugins/my_plugin"
+)
+
+func main() {
+    application, err := app.New(app.Config{
+        // Every field is optional; nil means "use the env-driven default".
+        // DB:    gormDB,      // nil → db.Open(db.ConfigFromEnv())
+        // Store: myStore,     // nil → storage.NewStore(storage.LoadConfig())
+        // KeyDB: keydbClient, // nil → keydb.New from KEYDB_* env
+        // Mail:  mailer,      // nil → mail.NewMailer()
+        Plugins: []plugins.Plugin{myplugin.New()},
+    })
+    if err != nil {
+        log.Fatalf("failed to build app: %v", err)
+    }
+    log.Fatal(application.Run())
+}
+```
+
+`app.NewFromEnv()` is shorthand for `app.New(app.Config{})` when you just want
+the previous environment-driven behaviour.
+
+**Quickstart: a custom plugin**
+
+```go
+package myplugin
+
+import (
+    "github.com/gin-gonic/gin"
+    "github.com/spf13/cobra"
+
+    "github.com/rolldone/donisgo/plugins"
+)
+
+type Plugin struct{}
+
+func New() plugins.Plugin { return &Plugin{} }
+
+func (p *Plugin) ID() string { return "my-plugin" }
+
+func (p *Plugin) RegisterServices(deps plugins.ServiceDeps) error { return nil }
+
+func (p *Plugin) RegisterMiddleware() []plugins.MiddlewareDescriptor {
+    return []plugins.MiddlewareDescriptor{{
+        Name:     "my-plugin-logger",
+        Target:   "admin",
+        Priority: plugins.PriorityLogging,
+        Handler:  func(c *gin.Context) { c.Next() },
+    }}
+}
+
+func (p *Plugin) RegisterRoutes(_ *gin.Engine, admin, _ *gin.RouterGroup) error {
+    admin.GET("/plugins/my-plugin/health", func(c *gin.Context) {
+        c.JSON(200, gin.H{"status": "ok"})
+    })
+    return nil
+}
+
+func (p *Plugin) Seed() error                     { return nil }
+func (p *Plugin) ConsoleCommands() []*cobra.Command { return nil }
+```
+
+**Quickstart: using packages standalone**
+
+```go
+// Event bus — instance scoped, no globals.
+bus := events.NewBus()
+stop := bus.Subscribe("user.created", func(ctx context.Context, payload interface{}) {
+    log.Printf("payload: %v", payload)
+})
+defer stop()
+bus.Publish("user.created", "user-42")
+
+// UUIDv7 — time ordered.
+id, err := uuid.New()
+
+// Database handle you own.
+gdb, err := db.Open(db.Config{Driver: "postgres", DSN: os.Getenv("DATABASE_URL")})
+```
+
+A complete, buildable consumer lives in
+[`examples/library/`](examples/library) — its own `go.mod` with a
+`replace github.com/rolldone/donisgo => ../..`. Build it with:
+
+```bash
+cd examples/library && go build ./...
+```
 
 What's included
 ---------------
