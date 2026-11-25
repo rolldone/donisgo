@@ -26,8 +26,12 @@ type Config struct {
 
 	// Pool tuning. Zero values fall back to the DB_* environment defaults
 	// (50 open, 10 idle, 300s lifetime).
-	MaxOpenConns       int
-	MaxIdleConns       int
+	//
+	// MaxOpenConns is the maximum number of open connections.
+	MaxOpenConns int
+	// MaxIdleConns is the maximum number of idle connections kept in the pool.
+	MaxIdleConns int
+	// ConnMaxLifetimeSec is how long a connection may be reused, in seconds.
 	ConnMaxLifetimeSec int
 }
 

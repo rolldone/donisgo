@@ -5,19 +5,20 @@ import (
 	"os"
 )
 
-// Config holds konfigurasi storage dari environment
+// Config holds the storage configuration loaded from the environment.
 type Config struct {
-	Driver      string // "local" atau "s3"
-	Root        string // untuk local: path ke direktori penyimpanan
-	PublicURL   string // base URL publik; contoh: "http://localhost:8080/assets" atau "https://cdn.example.com"
-	S3Bucket    string // untuk S3
-	S3Region    string // untuk S3
-	S3Endpoint  string // untuk S3 (optional, untuk MinIO)
-	S3AccessKey string // untuk S3
-	S3SecretKey string // untuk S3
+	Driver      string // "local" or "s3"
+	Root        string // local only: storage directory
+	PublicURL   string // public base URL, e.g. "http://localhost:8080/assets" or "https://cdn.example.com"
+	S3Bucket    string // S3 only
+	S3Region    string // S3 only
+	S3Endpoint  string // S3 only (optional; for MinIO)
+	S3AccessKey string // S3 only
+	S3SecretKey string // S3 only
 }
 
-// LoadConfig membaca konfigurasi storage dari environment
+// LoadConfig builds a Config from the STORAGE_* (and S3_*) environment
+// variables, validating the driver and its required settings.
 func LoadConfig() (*Config, error) {
 	driver := os.Getenv("STORAGE_DRIVER")
 	if driver == "" {
@@ -33,7 +34,7 @@ func LoadConfig() (*Config, error) {
 		PublicURL: os.Getenv("STORAGE_PUBLIC_URL"),
 	}
 
-	// load driver-specific config
+	// load driver-specific settings
 	if driver == "local" {
 		root := os.Getenv("STORAGE_ROOT")
 		if root == "" {

@@ -442,22 +442,22 @@ func (a *App) Run() error {
 	return a.router.Run()
 }
 
-// GetStore mengembalikan Storage service instance
+// GetStore returns the storage service wired into the application.
 func (a *App) GetStore() storage.Store {
 	return a.store
 }
 
-// GetMailer mengembalikan Mailer instance yang di-wire ke aplikasi.
+// GetMailer returns the mailer wired into the application.
 func (a *App) GetMailer() *mail.Mailer {
 	return a.mail
 }
 
-// GetKeyDB mengembalikan KeyDB client (nil bila tidak dikonfigurasi).
+// GetKeyDB returns the KeyDB client, or nil when it is not configured.
 func (a *App) GetKeyDB() *keydb.Client {
 	return a.keydb
 }
 
-// GetRegistry mengembalikan plugin registry milik aplikasi ini.
+// GetRegistry returns the plugin registry owned by this application.
 func (a *App) GetRegistry() *plugins.Registry {
 	return a.registry
 }
@@ -495,17 +495,17 @@ func (a *App) registerAdminRoutes() {
 }
 
 // registerStoreRoutes wires all core store/public endpoints.
-// KOSONG (sengaja) — donisgo tidak lagi menyajikan halaman/SPA secara otomatis
-// sejak v0.2.0: SPA serving, root "/", NoRoute catch-all, dan StaticFS adalah
-// tanggung jawab aplikasi/starter (mis. plugin `pages` di
-// github.com/rolldone/donisgo-template). Bootstrap tidak menangani route
-// tampilan.
+// Intentionally empty — since v0.2.0 donisgo no longer serves pages/SPA
+// automatically: SPA serving, the root "/", the NoRoute catch-all and StaticFS
+// are the application's (starter's) responsibility, for example through the
+// `pages` plugin in github.com/rolldone/donisgo-template. Bootstrap handles no
+// view routes.
 //
-// ⚠️ Fungsi ini sengaja dibiarkan ADA + kosong — TITIK FORCE: kalau suatu
-// saat butuh route publik yang harus di-register paling awal (sebelum
-// plugin) — taruh DI SINI dengan komentar jelas kenapa harus di sini.
+// This function is deliberately kept as an empty FORCE POINT: if a public route
+// ever has to be registered before the plugins, put it HERE with a clear
+// comment explaining why it belongs here.
 func (a *App) registerStoreRoutes() {
-	// (kosong — lihat komentar di atas)
+	// (empty — see the comment above)
 }
 
 // registerSwaggerRoutes registers handlers for serving the generated swagger JSON and UI.

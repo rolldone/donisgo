@@ -2,26 +2,19 @@ package plugin_registry
 
 import "fmt"
 
-// ══════════════════════════════════════════════════════════════════════════
-// ERROR BERSAMA ANTAR PLUGIN
-// ══════════════════════════════════════════════════════════════════════════
-// Tipe error yang dibagikan antar plugin didefinisikan di sini supaya plugin
-// lain bisa mendeteksinya dengan errors.As tanpa saling import.
+// ContractError is a sample shared error type. Plugins can detect it (with
+// errors.As) to return a structured response without importing each other:
 //
-// Contoh pemakaian di handler:
-//
-//	var le *plugin_registry.ContractError
-//	if errors.As(err, &le) {
-//		// beri respons terstruktur berdasarkan le.Code
+//	var ce *plugin_registry.ContractError
+//	if errors.As(err, &ce) {
+//		// build a structured response from ce.Code
 //	}
 //
-// ══════════════════════════════════════════════════════════════════════════
-
-// ContractError adalah contoh tipe error bersama antar plugin. Plugin dapat
-// mendeteksi tipe ini untuk memberi respons terstruktur. Sesuaikan field-nya
-// dengan kebutuhan nyata (misal error limit/kuota).
+// Adjust its fields to your real needs (for example limit/quota errors).
 type ContractError struct {
-	Code    string `json:"code"`
+	// Code is a machine-readable error code (e.g. "quota_exceeded").
+	Code string `json:"code"`
+	// Message is a human-readable description.
 	Message string `json:"message"`
 }
 
@@ -30,7 +23,7 @@ func (e *ContractError) Error() string {
 	return fmt.Sprintf("[%s] %s", e.Code, e.Message)
 }
 
-// NewContractError membuat ContractError baru.
+// NewContractError returns a ContractError with the given code and message.
 func NewContractError(code, message string) *ContractError {
 	return &ContractError{Code: code, Message: message}
 }

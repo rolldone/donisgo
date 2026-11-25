@@ -11,7 +11,9 @@ import (
 
 // Flash represents a one-time message to display to the user.
 type Flash struct {
-	Type    string `json:"type"` // "success", "error", "info"
+	// Type is the message kind: "success", "error", or "info".
+	Type string `json:"type"`
+	// Message is the text shown to the user.
 	Message string `json:"message"`
 }
 

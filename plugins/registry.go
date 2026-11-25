@@ -32,14 +32,14 @@ func (r *Registry) RegisterPlugins(p []Plugin) {
 	r.registered = append(r.registered, p...)
 }
 
-// EnsurePluginLast registers p at the END of the registry. Jika plugin dengan
-// ID yang sama sudah terdaftar, entri lama dipindah ke akhir (dedup) sehingga
-// plugin tersebut terdaftar tepat satu kali dan selalu menjadi yang terakhir.
+// EnsurePluginLast registers p at the END of the registry. If a plugin with the
+// same ID is already registered, the old entry is moved to the end (dedup), so
+// the plugin is registered exactly once and always last.
 //
-// Dipakai pemanggil untuk plugin yang memegang wildcard/catch-all (mis. plugin
-// `pages`/SPA via router.NoRoute): panggil ini setelah plugin lain didaftarkan
-// agar route spesifik (api/admin/health) menang lebih dulu. Idempotent — aman
-// dipanggil berkali-kali.
+// Callers use it for plugins that own a wildcard/catch-all route (for example a
+// SPA/pages plugin using router.NoRoute): call it after the other plugins are
+// registered so specific routes (api/admin/health) win first. It is idempotent
+// and safe to call repeatedly.
 func (r *Registry) EnsurePluginLast(p Plugin) {
 	for i, existing := range r.registered {
 		if existing.ID() == p.ID() {

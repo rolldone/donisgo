@@ -4,13 +4,13 @@ import (
 	"fmt"
 )
 
-// NewStore membuat dan mengembalikan Store instance berdasarkan konfigurasi
+// NewStore returns the Store implementation selected by cfg.Driver.
 func NewStore(cfg *Config) (Store, error) {
 	switch cfg.Driver {
 	case "local":
 		return NewLocalStore(cfg.Root, cfg.PublicURL)
 	case "s3":
-		// TODO: implementasi S3Store dengan AWS SDK atau BeyondStorage S3 driver
+		// TODO: implement S3Store with the AWS SDK or a BeyondStorage S3 driver
 		return nil, fmt.Errorf("s3 driver not yet implemented")
 	default:
 		return nil, fmt.Errorf("unsupported storage driver: %s", cfg.Driver)

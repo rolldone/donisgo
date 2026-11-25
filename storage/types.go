@@ -5,35 +5,37 @@ import (
 	"io"
 )
 
-// FileMeta holds metadata tentang file yang disimpan
+// FileMeta holds metadata about a stored file.
 type FileMeta struct {
-	Key       string // unique key/path di storage
-	Size      int64  // bytes
+	Key       string // unique key/path within the store
+	Size      int64  // size in bytes
 	MimeType  string // content type
 	CreatedAt int64  // unix timestamp
 }
 
-// Store adalah interface abstraksi storage (lokal atau cloud)
+// Store is the storage abstraction implemented by local and cloud backends.
 type Store interface {
-	// Put menyimpan file dengan content dari reader
+	// Put stores the reader's content under key.
 	Put(ctx context.Context, key string, data io.Reader) error
 
-	// Get mengambil file dari storage
+	// Get returns the file's content as a ReadCloser.
 	Get(ctx context.Context, key string) (io.ReadCloser, error)
 
-	// Delete menghapus file dari storage
+	// Delete removes the file under key.
 	Delete(ctx context.Context, key string) error
 
-	// Stat mengambil metadata file
+	// Stat returns the file's metadata.
 	Stat(ctx context.Context, key string) (*FileMeta, error)
 
-	// List menampilkan files dengan prefix (untuk cleanup/listing)
+	// List returns the keys that start with prefix (useful for cleanup and
+	// listing).
 	List(ctx context.Context, prefix string) ([]string, error)
 
-	// PublicURL mengembalikan public/signed URL untuk akses file
-	// Untuk local storage, bisa return relative path; untuk S3 bisa presigned URL
+	// PublicURL returns a public or signed URL for the file. Local storage
+	// returns a URL built from its public base URL; an S3 backend may return a
+	// presigned URL.
 	PublicURL(ctx context.Context, key string) (string, error)
 
-	// Close menutup koneksi storage jika perlu
+	// Close releases any resources held by the store.
 	Close() error
 }

@@ -1,84 +1,40 @@
-// Package plugin_registry menyediakan mekanisme komunikasi antar plugin
-// melalui interface contract.
-//
-// Masalah yang dipecahkan: dua plugin yang saling butuh layanan akan jatuh ke
-// circular import jika mereka saling import langsung. Solusinya — keduanya
-// import package ini saja:
-//
-//	┌─────────────┐  register  ┌──────────────────┐   delegate   ┌─────────────┐
-//	│ Plugin A    │───────────▶│  plugin_registry │◀─────────────│ Plugin B    │
-//	│ (PROVIDER)  │  Register  │  (interface +    │   panggil    │ (CONSUMER)  │
-//	└─────────────┘  XProvider│   nil-guard)     │  delegation  └─────────────┘
-//
-// Cara kerja:
-//  1. Definisikan interface contract di package ini (mis. ChatProvider).
-//  2. Plugin PROVIDER mendaftarkan implementasinya via Register<X>Provider(...)
-//     pada RegisterServices(deps).
-//  3. Plugin CONSUMER memanggil delegation function (mis. SendMessage(...)).
-//  4. Provider & consumer TIDAK saling import — keduanya hanya import
-//     plugin_registry → tidak ada circular import.
-//  5. Setiap delegation function WAJIB punya nil-guard: kalau provider belum
-//     terdaftar, kembalikan default yang aman (bukan panic).
 package plugin_registry
 
 import "context"
 
-// ══════════════════════════════════════════════════════════════════════════
-// CARA MENAMBAH CONTRACT BARU
-// ══════════════════════════════════════════════════════════════════════════
+// EchoProvider is a SAMPLE contract. It demonstrates the provider/delegation
+// pattern described in the package documentation. When you write your first
+// real plugin, replace or supplement it with the contracts you actually need
+// (for example ChatProvider or AuthProvider).
 //
-// Salin pola di bawah (pakai EchoProvider sebagai contoh), lalu sesuaikan:
+// To add a new contract:
 //
-//	// 1. Definisikan interface yang dibutuhkan consumer.
-//	type NamaProvider interface {
-//		Method(ctx context.Context, ...) (..., error)
-//	}
+//  1. Define the interface the consumer needs.
+//  2. Add a package-level variable holding the registered implementation.
+//  3. Add a Register<X>Provider function for the PROVIDER plugin to call from
+//     RegisterServices.
+//  4. Add a delegation function for the CONSUMER plugin, with a nil-guard that
+//     returns a safe default when no provider is registered.
 //
-//	// 2. Variabel package-level untuk menyimpan implementasi terdaftar.
-//	var namaProvider NamaProvider
-//
-//	// 3. Fungsi register — dipanggil oleh plugin PROVIDER di RegisterServices.
-//	func RegisterNamaProvider(p NamaProvider) { namaProvider = p }
-//
-//	// 4. Fungsi delegation — dipanggil oleh plugin CONSUMER.
-//	func NamaDelegation(ctx context.Context, ...) (..., error) {
-//		if namaProvider == nil {
-//			return <nil-safe default>, nil
-//		}
-//		return namaProvider.Method(ctx, ...)
-//	}
-//
-// Aturan:
-//   - Interface & tipe data yang dibagikan (struct/error) didefinisikan DI SINI,
-//     bukan di plugin, supaya tidak ada dependency antar plugin.
-//   - Nama delegation function diawali kata kerja (Get*, Send*, Validate*, dst).
-//   - Nil-guard wajib: tanpa provider, sistem harus tetap berfungsi (no-op aman).
-//   - Jangan simpan state bisnis di sini — ini hanya kontrak & dispatcher.
-//
-// ══════════════════════════════════════════════════════════════════════════
-
-// ──────────────────────────────────────────────────────────────────────────
-// CONTOH CONTRACT (pola baku — ganti dengan contract nyata sesuai kebutuhan)
-// ──────────────────────────────────────────────────────────────────────────
-
-// EchoProvider adalah CONTOH interface contract. Ia mendemonstrasikan pola
-// provider/delegation. Saat plugin bisnis pertama dibuat, ganti/blok contoh
-// ini dengan contract yang relevan (mis. ChatProvider, AuthProvider, dll).
+// Shared interfaces and types (structs, errors) belong in this package, never in
+// a plugin, so plugins never depend on each other. Delegation function names
+// start with a verb (Get*, Send*, Validate*, ...). Do not store business state
+// here: this package is only contracts and dispatch.
 type EchoProvider interface {
-	// Echo mengembalikan pesan yang sama (placeholder demonstrasi pola).
+	// Echo returns the message unchanged (placeholder for the pattern).
 	Echo(ctx context.Context, msg string) (string, error)
 }
 
 var echoProvider EchoProvider
 
-// RegisterEchoProvider mendaftarkan implementasi EchoProvider. Dipanggil oleh
-// plugin provider di RegisterServices.
+// RegisterEchoProvider registers an EchoProvider implementation. A provider
+// plugin calls it from RegisterServices.
 func RegisterEchoProvider(p EchoProvider) {
 	echoProvider = p
 }
 
-// Echo memanggil provider terdaftar. Nil-guard: jika belum ada provider yang
-// mendaftar, kembalikan pesan apa adanya (no-op aman).
+// Echo calls the registered provider. Nil-guard: when no provider has
+// registered, it returns the message unchanged (a safe no-op).
 func Echo(ctx context.Context, msg string) (string, error) {
 	if echoProvider == nil {
 		return msg, nil
