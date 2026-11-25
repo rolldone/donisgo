@@ -429,38 +429,71 @@ This framework provides JWT utilities but does not include built-in authenticati
 JWT utilities available (`auth`)
 -----------------------------------------
 
-**Basic JWT functions** (`auth/jwt.go`):
+**Recommended: an explicit instance** (`auth/config.go`, `auth/jwt.go`) —
+build an `*Auth` from `auth.Config` and use its methods. Instances are
+independent, so two of them with different secrets never verify each other's
+tokens:
 ```go
+a, err := auth.New(auth.Config{
+    AccessSecret:  os.Getenv("AUTH_ACCESS_SECRET"),
+    RefreshSecret: os.Getenv("AUTH_REFRESH_SECRET"),
+    ResetSecret:   os.Getenv("AUTH_RESET_SECRET"),
+    // Lifetimes are optional; zero values use the defaults (10m / 14d / 1h).
+    AccessTTL:  15 * time.Minute,
+    RefreshTTL: 14 * 24 * time.Hour,
+    ResetTTL:   time.Hour,
+})
+if err != nil {
+    log.Fatal(err) // a missing secret is an error, never a silent insecure default
+}
+
 // Generate tokens
-token, err := auth.SignAccessToken(userID)       // Generate access token
-refresh, err := auth.SignRefreshToken(userID)    // Generate refresh token
+token, err := a.SignAccessToken(userID)       // Generate access token
+refresh, err := a.SignRefreshToken(userID)    // Generate refresh token
 
 // Parse/verify tokens
-userID, err := auth.ParseAccessToken(tokenStr)   // Verify access token, returns user ID
-userID, err := auth.ParseRefreshToken(tokenStr)  // Verify refresh token, returns user ID
+userID, err := a.ParseAccessToken(tokenStr)   // Verify access token, returns user ID
+userID, err := a.ParseRefreshToken(tokenStr)  // Verify refresh token, returns user ID
 
 // Get token expiry settings
-accessExp := auth.AccessExpirySeconds()   // e.g., 900 (15 minutes)
-refreshExp := auth.RefreshExpirySeconds() // e.g., 1209600 (14 days)
+accessExp := a.AccessExpirySeconds()   // e.g., 900 (15 minutes)
+refreshExp := a.RefreshExpirySeconds() // e.g., 1209600 (14 days)
+```
+
+Prefer explicit secrets. If you must keep reading the environment, `auth.ConfigFromEnv()`
+maps the legacy variables (`AUTH_JWT_SECRET` first, then `JWT_ACCESS_SECRET` /
+`JWT_REFRESH_SECRET` / `JWT_RESET_SECRET`, plus the `JWT_*_EXP_SECONDS`
+lifetimes) into a `Config` you can pass to `auth.New`.
+
+**Deprecated: package-level helpers.** The old package-level API still works —
+it forwards to an instance built from the environment at startup — but it is
+deprecated and will be removed at v1.0:
+```go
+// Deprecated: use an *Auth instance instead.
+token, err := auth.SignAccessToken(userID)
+userID, err := auth.ParseAccessToken(tokenStr)
+exp := auth.AccessExpirySeconds()
 ```
 
 **Advanced JWT with custom claims** (`auth/claims_tokens.go`):
 ```go
 // Generate token with admin_id and level claims
-token, expTime, err := auth.GenerateAccessTokenWithLevel(
+token, expTime, err := a.GenerateAccessTokenWithLevel(
     adminID,
     "admin",  // level: "admin", "user", etc.
     15 * time.Minute,
 )
 
 // Parse token and get claims
-claims, err := auth.ParseAccessTokenClaims(tokenStr)
+claims, err := a.ParseAccessTokenClaims(tokenStr)
 if err == nil {
     adminID := claims.AdminID
     level := claims.Level
     exp := claims.ExpiresAt
 }
 ```
+The package-level `auth.GenerateAccessTokenWithLevel` / `auth.ParseAccessTokenClaims`
+are deprecated in the same way as the functions above.
 
 **Opaque refresh tokens** (non-JWT, for database storage):
 ```go
@@ -551,19 +584,26 @@ import (
 )
 
 func TestJWT(t *testing.T) {
-    // Set environment variable for testing
-    t.Setenv("AUTH_JWT_SECRET", "test-secret-key")
+    // Build an explicit instance; no environment needed.
+    a, err := auth.New(auth.Config{
+        AccessSecret:  "test-access-secret",
+        RefreshSecret: "test-refresh-secret",
+        ResetSecret:   "test-reset-secret",
+    })
+    if err != nil {
+        t.Fatalf("auth.New: %v", err)
+    }
     
     userID := "user123"
     
     // Generate access token
-    token, err := auth.SignAccessToken(userID)
+    token, err := a.SignAccessToken(userID)
     if err != nil {
         t.Fatalf("failed to sign token: %v", err)
     }
     
     // Verify access token
-    parsedID, err := auth.ParseAccessToken(token)
+    parsedID, err := a.ParseAccessToken(token)
     if err != nil {
         t.Fatalf("failed to parse token: %v", err)
     }
@@ -574,16 +614,23 @@ func TestJWT(t *testing.T) {
 }
 
 func TestJWTWithClaims(t *testing.T) {
-    t.Setenv("AUTH_JWT_SECRET", "test-secret-key")
+    a, err := auth.New(auth.Config{
+        AccessSecret:  "test-access-secret",
+        RefreshSecret: "test-refresh-secret",
+        ResetSecret:   "test-reset-secret",
+    })
+    if err != nil {
+        t.Fatalf("auth.New: %v", err)
+    }
     
     // Generate token with custom claims
-    token, _, err := auth.GenerateAccessTokenWithLevel("admin123", "admin", 15*time.Minute)
+    token, _, err := a.GenerateAccessTokenWithLevel("admin123", "admin", 15*time.Minute)
     if err != nil {
         t.Fatal(err)
     }
     
     // Parse and verify claims
-    claims, err := auth.ParseAccessTokenClaims(token)
+    claims, err := a.ParseAccessTokenClaims(token)
     if err != nil {
         t.Fatal(err)
     }

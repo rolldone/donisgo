@@ -17,8 +17,22 @@ type AccessClaims struct {
 }
 
 // GenerateAccessTokenWithLevel signs HS256 token containing admin_id + level claims.
+//
+// Deprecated: use (*Auth).GenerateAccessTokenWithLevel on an instance from New.
 func GenerateAccessTokenWithLevel(adminID, level string, ttl time.Duration) (string, time.Time, error) {
-	secret := accessSecret
+	return legacyInstance().GenerateAccessTokenWithLevel(adminID, level, ttl)
+}
+
+// ParseAccessTokenClaims verifies a token and returns its AccessClaims.
+//
+// Deprecated: use (*Auth).ParseAccessTokenClaims on an instance from New.
+func ParseAccessTokenClaims(tokenStr string) (*AccessClaims, error) {
+	return legacyInstance().ParseAccessTokenClaims(tokenStr)
+}
+
+// GenerateAccessTokenWithLevel signs HS256 token containing admin_id + level claims.
+func (a *Auth) GenerateAccessTokenWithLevel(adminID, level string, ttl time.Duration) (string, time.Time, error) {
+	secret := a.accessSecret
 	if secret == "" {
 		return "", time.Time{}, errors.New("jwt secret is empty")
 	}
@@ -39,11 +53,12 @@ func GenerateAccessTokenWithLevel(adminID, level string, ttl time.Duration) (str
 	return signed, exp, nil
 }
 
-func ParseAccessTokenClaims(tokenStr string) (*AccessClaims, error) {
+// ParseAccessTokenClaims verifies a token and returns its AccessClaims.
+func (a *Auth) ParseAccessTokenClaims(tokenStr string) (*AccessClaims, error) {
 	if tokenStr == "" {
 		return nil, errors.New("empty token")
 	}
-	secret := accessSecret
+	secret := a.accessSecret
 	if secret == "" {
 		return nil, errors.New("jwt secret is empty")
 	}
