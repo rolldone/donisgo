@@ -21,7 +21,7 @@ import (
 	"github.com/rolldone/donisgo/internal/keydb"
 	"github.com/rolldone/donisgo/internal/pluginloader"
 	"github.com/rolldone/donisgo/internal/plugins"
-	"github.com/rolldone/donisgo/internal/storage"
+	"github.com/rolldone/donisgo/storage"
 
 	"gorm.io/gorm"
 )

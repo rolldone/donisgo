@@ -8,7 +8,7 @@ import (
 
 	"github.com/rolldone/donisgo/internal/db"
 	"github.com/rolldone/donisgo/internal/plugins"
-	"github.com/rolldone/donisgo/internal/storage"
+	"github.com/rolldone/donisgo/storage"
 
 	"gorm.io/gorm"
 )

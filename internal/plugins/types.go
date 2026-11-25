@@ -1,7 +1,7 @@
 package plugins
 
 import (
-	"github.com/rolldone/donisgo/internal/storage"
+	"github.com/rolldone/donisgo/storage"
 
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
