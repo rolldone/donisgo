@@ -5,9 +5,26 @@ Semua perubahan penting didokumentasikan di sini. Format mengikuti
 [SemVer](https://semver.org/). Karena donisgo masih di jalur `v0.x`, perubahan
 yang tidak kompatibel dapat muncul pada bump **minor**.
 
-## [Unreleased]
+## [0.2.0] — unreleased
 
-> Draft — nomor versi ditentukan Manager saat rilis (SPEC-004 D3).
+> Draft — tanggal & tag ditentukan Manager saat rilis (fase 5). Entri ini
+> menggabungkan de-globalisasi `auth` (SPEC-004 D3) dan pembersihan pure library
+> (SPEC-005 fase 4).
+
+### Removed (BREAKING)
+
+- **`plugins/pages`** — plugin konten (serving SPA `/app`, redirect `/spa`,
+  proxy `HOMEPAGE_URL`, wildcard `NoRoute`) dipindahkan ke
+  `github.com/rolldone/donisgo-template/plugins/pages`.
+- **`cmd/server` dan `cmd/console`** — donisgo kini nol binary; entrypoint
+  aplikasi ada di `donisgo-template/cmd/*`.
+- **Command `plugin new`** (implementasi di paket `console` + testnya) —
+  generator scaffold aplikasi dipindahkan ke `donisgo-template/console/`.
+- **`internal/pluginloader`** — dihapus sepenuhnya (`RegisterCorePlugins*`,
+  `RegisterLastPlugins*`). Registrasi plugin kini 100% tanggung jawab pemanggil
+  via `app.Config.Plugins`; donisgo tidak lagi mendaftarkan plugin apa pun.
+- Dokumentasi app-level (quickstart, plugin dev, env, deploy) dan
+  `.env.example` — dipindahkan ke repo starter.
 
 ### Added
 
@@ -20,6 +37,19 @@ yang tidak kompatibel dapat muncul pada bump **minor**.
   `JWT_REFRESH_SECRET`/`JWT_RESET_SECRET` + `JWT_*_EXP_SECONDS`) ke `Config`.
   (SPEC-004 D3)
 
+### Changed (BREAKING)
+
+- **Serving halaman/SPA tidak lagi otomatis.** `app` tidak menyajikan `/`,
+  `NoRoute` catch-all, maupun `StaticFS`; `registerStoreRoutes` tetap ada
+  sebagai titik force tetapi kosong. Aplikasi yang butuh serving halaman
+  mendaftarkan plugin `pages` secara eksplisit.
+- `app.attachPlugins` tidak lagi menambahkan plugin framework: urutan registry
+  sepenuhnya ditentukan pemanggil. Komentar `plugins.Registry.EnsurePluginLast`
+  diperbarui (kini mekanisme umum untuk plugin catch-all, bukan "paten
+  donisgo").
+- `console.RootCmd` memuat `migrate` & `seed` tanpa `plugin new`;
+  `NewRootCmd()` tetap tersedia agar starter dapat menempelkan command sendiri.
+
 ### Deprecated
 
 - API package-level `auth` (`Sign*Token`, `Parse*Token`,
@@ -27,6 +57,43 @@ yang tidak kompatibel dapat muncul pada bump **minor**.
   `AccessExpirySeconds` dkk.) kini wrapper ke instance default-env dan ditandai
   `// Deprecated:`; dipertahankan hingga v1.0 (SPEC-004 D4). Perilaku lama tidak
   berubah.
+
+### Migration notes
+
+Dari `v0.1.x` ke `v0.2.0`:
+
+1. **Aplikasi/sub-app yang mengandalkan serving halaman otomatis WAJIB
+   mendaftarkan `pages` manual** dari repo starter, di urutan terakhir:
+
+   ```go
+   import pagesplugin "github.com/rolldone/donisgo-template/plugins/pages"
+
+   application, err := app.New(app.Config{
+       Plugins: []plugins.Plugin{myplugin.New()},
+   })
+   if err != nil {
+       log.Fatal(err)
+   }
+   // jamin pages paling akhir (memegang router.NoRoute):
+   application.GetRegistry().EnsurePluginLast(pagesplugin.New())
+   ```
+
+   Tanpa langkah ini, `/app` dan fallback SPA akan mengembalikan 404.
+
+2. **Binary server & console**: pindahkan `cmd/server`/`cmd/console` dari
+   salinan lokal ke repo `donisgo-template` (path sama), lalu sesuaikan import
+   plugin aplikasi ke module path aplikasi Anda sendiri.
+
+3. **Generator `plugin new`**: kini tersedia lewat CLI di repo starter
+   (`go run ./cmd/console plugin new --id ...`). Hasil scaffold tetap mengimpor
+   `github.com/rolldone/donisgo/...` untuk paket framework.
+
+4. **Registrasi plugin**: tidak ada lagi `pluginloader`. Daftarkan plugin
+   eksplisit via `app.Config.Plugins` (server) dan
+   `console.RegisterAdditionalPlugins` (CLI).
+
+5. **Referensi dokumentasi aplikasi** (quickstart, env, deploy, `.env.example`)
+   pindah ke README repo starter.
 
 ## [0.1.4] — 2026-11-25
 

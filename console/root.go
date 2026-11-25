@@ -7,7 +7,6 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/spf13/cobra"
 
-	"github.com/rolldone/donisgo/internal/pluginloader"
 	"github.com/rolldone/donisgo/plugins"
 )
 
@@ -26,10 +25,6 @@ func Execute() {
 
 // Run executes the root command with the provided arguments.
 func Run(args []string) error {
-	// Framework "bawaan" plugins (pages) dijamin selalu terakhir di registry
-	// untuk console juga. EnsurePluginLast idempotent → aman dipanggil di sini
-	// setelah RegisterAdditionalPlugins (user) di cmd/console/main.go.
-	pluginloader.RegisterLastPlugins()
 	rootCmd.SetArgs(args)
 	return rootCmd.Execute()
 }
@@ -41,6 +36,9 @@ func RegisterAdditionalPlugins(p []plugins.Plugin) {
 }
 
 // NewRootCmd returns the configured root cobra command.
+//
+// Starter tooling (e.g. the `plugin new` generator living in
+// github.com/rolldone/donisgo-template) can attach its own commands here.
 func NewRootCmd() *cobra.Command {
 	return rootCmd
 }
@@ -57,7 +55,7 @@ func init() {
 	}
 	rootCmd.Short = fmt.Sprintf("Console tools for %s", appName)
 
-	// register core plugins and their console commands
-	pluginloader.RegisterCorePlugins()
+	// register console commands from the default registry (donisgo ships no
+	// plugins of its own; callers add theirs via RegisterAdditionalPlugins).
 	plugins.RegisterConsoleCommands(rootCmd)
 }

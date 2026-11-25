@@ -36,9 +36,10 @@ func (r *Registry) RegisterPlugins(p []Plugin) {
 // ID yang sama sudah terdaftar, entri lama dipindah ke akhir (dedup) sehingga
 // plugin tersebut terdaftar tepat satu kali dan selalu menjadi yang terakhir.
 //
-// Dipakai untuk plugin "bawaan" framework yang memegang wildcard/catch-all
-// (mis. `pages` via router.NoRoute) — menjamin urutan terakhir tidak peduli
-// apa pun yang didaftarkan pemanggil di cmd/server/main.go / cmd/console.
+// Dipakai pemanggil untuk plugin yang memegang wildcard/catch-all (mis. plugin
+// `pages`/SPA via router.NoRoute): panggil ini setelah plugin lain didaftarkan
+// agar route spesifik (api/admin/health) menang lebih dulu. Idempotent — aman
+// dipanggil berkali-kali.
 func (r *Registry) EnsurePluginLast(p Plugin) {
 	for i, existing := range r.registered {
 		if existing.ID() == p.ID() {
@@ -118,8 +119,8 @@ var defaultRegistry = NewRegistry()
 // package-level helpers operate on.
 //
 // Deprecated: create a Registry with NewRegistry instead. This accessor exists
-// so transitional wiring (pluginloader, console, bootstrap until Fase 4) can use
-// the instance API on the same data the legacy helpers populate.
+// so transitional wiring (console, bootstrap until v1.0) can use the instance
+// API on the same data the legacy helpers populate.
 func DefaultRegistry() *Registry {
 	return defaultRegistry
 }
@@ -129,7 +130,7 @@ func DefaultRegistry() *Registry {
 //
 // Deprecated: create a Registry with NewRegistry and call its
 // RegisteredPlugins method. This wrapper delegates to a package-level default
-// registry and is kept until v1.0 so console/pluginloader/scaffolds keep
+// registry and is kept until v1.0 so console tooling and scaffolds keep
 // working.
 func RegisteredPlugins() []Plugin {
 	return defaultRegistry.RegisteredPlugins()

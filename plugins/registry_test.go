@@ -133,8 +133,7 @@ func TestRegistryIsolationWithDefault(t *testing.T) {
 }
 
 // TestPackageLevelWrappersStillWork memastikan wrapper deprecated tetap
-// berfungsi di atas default registry (dipakai console/pluginloader sampai
-// Fase 4).
+// berfungsi di atas default registry (dipakai console tooling sampai v1.0).
 func TestPackageLevelWrappersStillWork(t *testing.T) {
 	orig := defaultRegistry
 	defaultRegistry = NewRegistry()
