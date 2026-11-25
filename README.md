@@ -9,6 +9,7 @@ Table of contents
 -----------------
 - Overview
 - Quick Start
+- Using donisgo as a library
 - What's included
 - What's NOT included (implement via plugins)
 - Main components
@@ -31,7 +32,7 @@ Overview
 - Main binaries: `cmd/server/main.go` (HTTP server) and `cmd/console/main.go` (CLI/migrations)
 - Core philosophy: provide essential infrastructure (DB, routing, plugins) and let you implement features via plugins or custom code
 - **No built-in authentication or user management** - implement via plugins (recommended) or custom middleware
-- Application bootstrap and dependency wiring are in `internal/app/bootstrap.go`
+- Application bootstrap and dependency wiring are in `app/bootstrap.go`
 - Extensible via a plugin system that supports middleware, routes, services, migrations, and console commands
 
 Quick Start
@@ -65,6 +66,132 @@ The plugin generator creates an initial migration with a timestamp prefix, in th
 
 See sections below for more details.
 
+Using donisgo as a library
+--------------------------
+Since SPEC-004 the framework's core packages live at the module root, so any Go
+module can import them directly:
+
+```bash
+go get github.com/rolldone/donisgo
+```
+
+**Public packages**
+
+| Package | Import path | What you get |
+|---|---|---|
+| app | `github.com/rolldone/donisgo/app` | `app.Config`, `app.New`, `app.NewFromEnv`, `(*App).Run` |
+| plugins | `github.com/rolldone/donisgo/plugins` | `Plugin` contract, `ServiceDeps`, `MiddlewareDescriptor`, `Registry`, priority constants |
+| db | `github.com/rolldone/donisgo/db` | `db.Open(db.Config{...})`, `WithTransaction` |
+| events | `github.com/rolldone/donisgo/events` | `events.NewBus()` publish/subscribe + request/reply |
+| keydb | `github.com/rolldone/donisgo/keydb` | `keydb.New(cfg)` → `*Client` (flash messages, raw Redis) |
+| storage | `github.com/rolldone/donisgo/storage` | `Store` interface, `Config`, `NewStore` |
+| mail | `github.com/rolldone/donisgo/mail` | `Mailer`, `Mailable`, `SMTPConfig`, `NewMailerWithConfig` |
+| auth | `github.com/rolldone/donisgo/auth` | JWT sign/parse helpers |
+| secrets | `github.com/rolldone/donisgo/secrets` | `EncryptBlob` / `DecryptBlob` |
+| uuid | `github.com/rolldone/donisgo/uuid` | `uuid.New()` UUIDv7 generator |
+
+Only `internal/console` (CLI tooling) and `internal/pluginloader` (framework
+plugin wiring) remain under `internal/` — they are implementation details, not
+library API.
+
+**Quickstart: wiring an app**
+
+```go
+package main
+
+import (
+    "log"
+
+    "github.com/rolldone/donisgo/app"
+    "github.com/rolldone/donisgo/plugins"
+    myplugin "github.com/rolldone/donisgo/plugins/my_plugin"
+)
+
+func main() {
+    application, err := app.New(app.Config{
+        // Every field is optional; nil means "use the env-driven default".
+        // DB:    gormDB,      // nil → db.Open(db.ConfigFromEnv())
+        // Store: myStore,     // nil → storage.NewStore(storage.LoadConfig())
+        // KeyDB: keydbClient, // nil → keydb.New from KEYDB_* env
+        // Mail:  mailer,      // nil → mail.NewMailer()
+        Plugins: []plugins.Plugin{myplugin.New()},
+    })
+    if err != nil {
+        log.Fatalf("failed to build app: %v", err)
+    }
+    log.Fatal(application.Run())
+}
+```
+
+`app.NewFromEnv()` is shorthand for `app.New(app.Config{})` when you just want
+the previous environment-driven behaviour.
+
+**Quickstart: a custom plugin**
+
+```go
+package myplugin
+
+import (
+    "github.com/gin-gonic/gin"
+    "github.com/spf13/cobra"
+
+    "github.com/rolldone/donisgo/plugins"
+)
+
+type Plugin struct{}
+
+func New() plugins.Plugin { return &Plugin{} }
+
+func (p *Plugin) ID() string { return "my-plugin" }
+
+func (p *Plugin) RegisterServices(deps plugins.ServiceDeps) error { return nil }
+
+func (p *Plugin) RegisterMiddleware() []plugins.MiddlewareDescriptor {
+    return []plugins.MiddlewareDescriptor{{
+        Name:     "my-plugin-logger",
+        Target:   "admin",
+        Priority: plugins.PriorityLogging,
+        Handler:  func(c *gin.Context) { c.Next() },
+    }}
+}
+
+func (p *Plugin) RegisterRoutes(_ *gin.Engine, admin, _ *gin.RouterGroup) error {
+    admin.GET("/plugins/my-plugin/health", func(c *gin.Context) {
+        c.JSON(200, gin.H{"status": "ok"})
+    })
+    return nil
+}
+
+func (p *Plugin) Seed() error                     { return nil }
+func (p *Plugin) ConsoleCommands() []*cobra.Command { return nil }
+```
+
+**Quickstart: using packages standalone**
+
+```go
+// Event bus — instance scoped, no globals.
+bus := events.NewBus()
+stop := bus.Subscribe("user.created", func(ctx context.Context, payload interface{}) {
+    log.Printf("payload: %v", payload)
+})
+defer stop()
+bus.Publish("user.created", "user-42")
+
+// UUIDv7 — time ordered.
+id, err := uuid.New()
+
+// Database handle you own.
+gdb, err := db.Open(db.Config{Driver: "postgres", DSN: os.Getenv("DATABASE_URL")})
+```
+
+A complete, buildable consumer lives in
+[`examples/library/`](examples/library) — its own `go.mod` with a
+`replace github.com/rolldone/donisgo => ../..`. Build it with:
+
+```bash
+cd examples/library && go build ./...
+```
+
 What's included
 ---------------
 ✅ Database connectivity (GORM - PostgreSQL, MySQL, MariaDB)  
@@ -92,7 +219,7 @@ What's NOT included (implement via plugins)
 
 Main components
 ---------------
-- Bootstrap & wiring: `internal/app/bootstrap.go`
+- Bootstrap & wiring: `app/bootstrap.go`
 - Business services: `internal/admin/services`
 - Database (GORM): `db/gorm.go`
 - Auth utilities (JWT): `auth` (token generation/verification helpers)
@@ -658,7 +785,7 @@ framework — user TIDAK perlu (dan tidak boleh) mendaftarkannya manual:
   `./sub_app/webapp/dist`, wildcard/catch-all via `router.NoRoute`, dan proxy
   homepage opsional (`HOMEPAGE_URL`). Selalu di-register **PALING AKHIR** oleh
   `pluginloader.RegisterLastPlugins()`:
-  - Server: dipanggil dari `internal/app/bootstrap.go` (`attachPlugins`)
+  - Server: dipanggil dari `app/bootstrap.go` (`attachPlugins`)
     SETELAH plugin user didaftarkan.
   - Console: dipanggil dari `internal/console/root.go` (`Run`).
   Karena ia memegang `router.NoRoute`, urutan terakhir ini WAJIB — semua route
@@ -842,13 +969,55 @@ Notes:
 - Choose middleware `Priority` carefully so plugins integrate predictably with core middleware.
 - Keep plugins isolated and avoid global mutable state.
 - Register plugins before `plugins.AttachMiddleware` is called (bootstrap handles this via `app.Run` options).
+- Prefer explicit wiring with `app.New(app.Config{Plugins: ...})` over the deprecated `app.Options` hook — see "Wiring the app" below.
 
 - Limit the privileges of plugin-executed operations (DB, external APIs) where possible.
+
+Wiring the app
+--------------
+`app.Config` is the explicit, injectable entrypoint (SPEC-004). Every field is
+optional: a nil value falls back to the framework's environment-driven
+behaviour, so you override only what you care about.
+
+```go
+import (
+   "github.com/rolldone/donisgo/app"
+   "github.com/rolldone/donisgo/plugins"
+   myplugin "github.com/rolldone/donisgo/plugins/my_plugin"
+)
+
+application, err := app.New(app.Config{
+   // Optional: inject handles you already own.
+   // DB:    gormDB,          // nil → db.Open(db.ConfigFromEnv())
+   // Store: myStore,         // nil → storage.NewStore(storage.LoadConfig())
+   // KeyDB: keydbClient,     // nil → keydb.New from KEYDB_* env
+   // Mail:  mailer,          // nil → mail.NewMailer()
+   // CORS:  &cors.Config{},  // nil → CORS_ALLOWED_ORIGINS behaviour
+   // TrustedProxies: []string{"10.0.0.0/8"}, // empty → gin default (trust all)
+
+   Plugins: []plugins.Plugin{myplugin.New()},
+})
+if err != nil {
+   log.Fatalf("failed to build app: %v", err)
+}
+log.Fatal(application.Run())
+```
+
+Notes:
+- `Plugins` non-nil → a **fresh, isolated** `plugins.Registry` owned by this
+  `App`. `Plugins` nil → the shared default registry is adopted (transitional
+  behaviour so the deprecated package-level helpers keep working).
+- `app.NewFromEnv()` is sugar for `app.New(app.Config{})` — the legacy
+  environment-driven boot used by `cmd/*`.
+- Resolved dependencies are exposed through `GetStore()`, `GetMailer()`,
+  `GetKeyDB()` and `GetRegistry()`.
+- `app.Run(app.Options{...})` still works but is **deprecated**; `Options`
+  registers into the default registry exactly as before.
 
 
 Bootstrapping (high level)
 --------------------------
-1. `cmd/server` calls bootstrap in `internal/app` to initialize:
+1. `cmd/server` calls bootstrap in `app` to initialize:
    - Configuration from environment variables
    - Database connection (GORM)
    - Storage service (`local` or `s3`)
@@ -891,7 +1060,7 @@ Extension points & best practices
 - Keep plugins isolated and testable - each plugin should be self-contained
 
 **Code organization:**
-- Add routes/handlers via plugins (recommended) or by modifying `internal/app/bootstrap.go`
+- Add routes/handlers via plugins (recommended) or by modifying `app/bootstrap.go`
 - Register middleware with explicit priority so execution order is predictable
 - Keep service layer decoupled from HTTP layer — services should accept `context.Context` and repository interfaces
 - Prefer plugin-local services initialized from `plugins.ServiceDeps` instead of extending core structs unless truly necessary
@@ -915,7 +1084,7 @@ Quick file references
 ---------------------
 - Server entry: `cmd/server/main.go`
 - Console entry: `cmd/console/main.go`
-- Bootstrap: `internal/app/bootstrap.go`
+- Bootstrap: `app/bootstrap.go`
 - Admin services: `internal/admin/services/services.go`
 - Plugin loader: `internal/pluginloader/loader.go`
 - Plugin registry: `plugins/registry.go`
