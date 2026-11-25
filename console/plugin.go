@@ -13,6 +13,18 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// frameworkModulePath is the canonical import path of donisgo itself.
+//
+// Generated scaffolds must always import *framework* packages (plugins,
+// events, ...) through this path. They must NOT use modulePath(), which reads
+// the go.mod of the current working directory: when the generator runs inside a
+// consumer module that value is the application module, so framework imports
+// would point at packages the consumer does not have (issue #13).
+//
+// Application packages written by the scaffold (handlers, middleware, services)
+// do belong to the consumer, so those keep using modulePath().
+const frameworkModulePath = "github.com/rolldone/donisgo"
+
 var (
 	pluginNewID       string
 	pluginNewName     string
@@ -86,18 +98,18 @@ var pluginNewCmd = &cobra.Command{
 		}
 
 		// Read the actual module path once so generated imports match this project's go.mod.
-		mod := modulePath()
+		appModule := modulePath()
 
 		// Files
 		var pluginContent string
 		switch tmpl {
 		case "minimal":
-			pluginContent = pluginGoTemplateMinimal(mod, pkgName, id, display, !pluginSkipConsole)
+			pluginContent = pluginGoTemplateMinimal(appModule, pkgName, id, display, !pluginSkipConsole)
 			if err := writeGoFileIfMissing(filepath.Join(base, "handlers", "health.go"), pluginHandlerTemplate(id)); err != nil {
 				return err
 			}
 		case "crud":
-			pluginContent = pluginGoTemplateCRUD(mod, pkgName, id, display, !pluginSkipConsole)
+			pluginContent = pluginGoTemplateCRUD(appModule, pkgName, id, display, !pluginSkipConsole)
 			if err := writeGoFileIfMissing(filepath.Join(base, "handlers", "resource.go"), pluginCRUDHandlerTemplate(id)); err != nil {
 				return err
 			}
@@ -105,7 +117,7 @@ var pluginNewCmd = &cobra.Command{
 				return err
 			}
 		case "middleware":
-			pluginContent = pluginGoTemplateMiddleware(mod, pkgName, id, display, !pluginSkipConsole)
+			pluginContent = pluginGoTemplateMiddleware(appModule, pkgName, id, display, !pluginSkipConsole)
 			if err := writeGoFileIfMissing(filepath.Join(base, "middleware", "sample.go"), pluginMiddlewareTemplate(id)); err != nil {
 				return err
 			}
@@ -124,7 +136,7 @@ var pluginNewCmd = &cobra.Command{
 		}
 
 		// example events file showing how to subscribe/publish internal events
-		if err := writeGoFileIfMissing(filepath.Join(base, "events.go"), pluginEventsTemplate(pkgName, id, mod)); err != nil {
+		if err := writeGoFileIfMissing(filepath.Join(base, "events.go"), pluginEventsTemplate(pkgName, id)); err != nil {
 			return err
 		}
 
@@ -194,11 +206,15 @@ func checkMissing(path string) error {
 	return nil
 }
 
-// modulePath reads the current module path from go.mod so generated plugin
-// templates reference the actual module (which may differ from donisgo
-// when the framework is used as a scaffold). Falls back to "github.com/rolldone/donisgo".
+// modulePath reads the *application* module path from the go.mod in the current
+// working directory. Generated scaffolds use it for imports of packages that
+// belong to the consuming application (handlers, middleware, services).
+//
+// It must NOT be used for framework imports — see frameworkModulePath. When no
+// go.mod is present it falls back to frameworkModulePath so the generator still
+// works inside the donisgo repository itself.
 func modulePath() string {
-	const fallback = "github.com/rolldone/donisgo"
+	const fallback = frameworkModulePath
 	data, err := os.ReadFile("go.mod")
 	if err != nil {
 		return fallback
@@ -252,7 +268,7 @@ func toUpper(r rune) rune {
 	return r
 }
 
-func pluginGoTemplateMinimal(mod, pkg, id, display string, includeConsole bool) string {
+func pluginGoTemplateMinimal(appModule, pkg, id, display string, includeConsole bool) string {
 	consoleBlock := ""
 	if includeConsole {
 		consoleBlock = fmt.Sprintf(`	cmd := &cobra.Command{
@@ -300,10 +316,10 @@ func (p *Plugin) Seed() error { return nil }
 
 func (p *Plugin) ConsoleCommands() []*cobra.Command {
 %s}
-`, pkg, mod, mod, id, display, id, id, consoleBlock)
+`, pkg, frameworkModulePath, appModule, id, display, id, id, consoleBlock)
 }
 
-func pluginGoTemplateCRUD(mod, pkg, id, display string, includeConsole bool) string {
+func pluginGoTemplateCRUD(appModule, pkg, id, display string, includeConsole bool) string {
 	consoleBlock := ""
 	if includeConsole {
 		consoleBlock = fmt.Sprintf(`	cmd := &cobra.Command{
@@ -352,10 +368,10 @@ func (p *Plugin) Seed() error { return nil }
 
 func (p *Plugin) ConsoleCommands() []*cobra.Command {
 %s}
-`, pkg, mod, mod, id, display, id, id, id, id, consoleBlock)
+`, pkg, frameworkModulePath, appModule, id, display, id, id, id, id, consoleBlock)
 }
 
-func pluginGoTemplateMiddleware(mod, pkg, id, display string, includeConsole bool) string {
+func pluginGoTemplateMiddleware(appModule, pkg, id, display string, includeConsole bool) string {
 	consoleBlock := ""
 	if includeConsole {
 		consoleBlock = fmt.Sprintf(`	cmd := &cobra.Command{
@@ -409,7 +425,7 @@ func (p *Plugin) Seed() error { return nil }
 
 func (p *Plugin) ConsoleCommands() []*cobra.Command {
 %s}
-`, pkg, mod, mod, id, display, id, id, consoleBlock)
+`, pkg, frameworkModulePath, appModule, id, display, id, id, consoleBlock)
 }
 
 func pluginHandlerTemplate(id string) string {
@@ -479,7 +495,9 @@ func SampleMiddleware(c *gin.Context) {
 
 // pluginEventsTemplate returns a sample events.go that demonstrates subscribing to
 // and handling internal events. It's written into the generated plugin package.
-func pluginEventsTemplate(pkg, id, mod string) string {
+// The events package is part of the framework, so it is always imported through
+// frameworkModulePath regardless of the application's module path.
+func pluginEventsTemplate(pkg, id string) string {
 	return fmt.Sprintf(`package %s
 
 import (
@@ -497,5 +515,5 @@ func registerEventHandlers() {
 			_ = ctx
 		})
 }
-`, pkg, mod, id)
+`, pkg, frameworkModulePath, id)
 }

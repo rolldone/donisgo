@@ -56,55 +56,66 @@ func TestModulePath_Quoted(t *testing.T) {
 	}
 }
 
-// TestPluginTemplates_UseModulePath guards against mismatched fmt.Sprintf arg
-// ordering and hardcoded module imports in the generated templates.
-func TestPluginTemplates_UseModulePath(t *testing.T) {
+// TestPluginTemplates_SeparateFrameworkAndAppPaths guards issue #13: imports of
+// *framework* packages must always use frameworkModulePath (so a scaffold in a
+// consumer module resolves them), while imports of *application* packages must
+// keep following the module path of the go.mod in the working directory.
+func TestPluginTemplates_SeparateFrameworkAndAppPaths(t *testing.T) {
 	const (
-		mod     = "example.com/historic_service"
+		appMod  = "example.com/historic_service"
 		pkgName = "my_plugin"
 		id      = "my-plugin"
 		display = "My Plugin"
 	)
 
 	cases := []struct {
-		name string
-		got  string
-		want []string
+		name          string
+		got           string
+		wantFramework []string
+		wantApp       []string
 	}{
 		{
 			name: "minimal",
-			got:  pluginGoTemplateMinimal(mod, pkgName, id, display, true),
-			want: []string{
-				`"example.com/historic_service/plugins"`,
-				`pluginhandlers "example.com/historic_service/plugins/my-plugin/handlers"`,
+			got:  pluginGoTemplateMinimal(appMod, pkgName, id, display, true),
+			wantFramework: []string{
+				`"` + frameworkModulePath + `/plugins"`,
+			},
+			wantApp: []string{
+				`pluginhandlers "` + appMod + `/plugins/my-plugin/handlers"`,
 				`// Plugin My Plugin provides a minimal scaffold.`,
 				`func (p *Plugin) ID() string { return "my-plugin" }`,
 			},
 		},
 		{
 			name: "crud",
-			got:  pluginGoTemplateCRUD(mod, pkgName, id, display, true),
-			want: []string{
-				`"example.com/historic_service/plugins"`,
-				`pluginhandlers "example.com/historic_service/plugins/my-plugin/handlers"`,
+			got:  pluginGoTemplateCRUD(appMod, pkgName, id, display, true),
+			wantFramework: []string{
+				`"` + frameworkModulePath + `/plugins"`,
+			},
+			wantApp: []string{
+				`pluginhandlers "` + appMod + `/plugins/my-plugin/handlers"`,
 				`admin.GET("/plugins/my-plugin/items", pluginhandlers.ListItems)`,
 				`admin.GET("/plugins/my-plugin/items/:id", pluginhandlers.GetItem)`,
 			},
 		},
 		{
 			name: "middleware",
-			got:  pluginGoTemplateMiddleware(mod, pkgName, id, display, true),
-			want: []string{
-				`"example.com/historic_service/plugins"`,
-				`pluginmiddleware "example.com/historic_service/plugins/my-plugin/middleware"`,
+			got:  pluginGoTemplateMiddleware(appMod, pkgName, id, display, true),
+			wantFramework: []string{
+				`"` + frameworkModulePath + `/plugins"`,
+			},
+			wantApp: []string{
+				`pluginmiddleware "` + appMod + `/plugins/my-plugin/middleware"`,
 				`Name:     "my-plugin-sample-mw",`,
 			},
 		},
 		{
 			name: "events",
-			got:  pluginEventsTemplate(pkgName, id, mod),
-			want: []string{
-				`"example.com/historic_service/events"`,
+			got:  pluginEventsTemplate(pkgName, id),
+			wantFramework: []string{
+				`"` + frameworkModulePath + `/events"`,
+			},
+			wantApp: []string{
 				`log.Printf("plugin my-plugin: received user.created payload type=%T", payload)`,
 			},
 		},
@@ -115,12 +126,26 @@ func TestPluginTemplates_UseModulePath(t *testing.T) {
 			if strings.Contains(tc.got, "%!") {
 				t.Fatalf("template %s produced a fmt error marker:\n%s", tc.name, tc.got)
 			}
-			if strings.Contains(tc.got, "github.com/rolldone/donisgo/") {
-				t.Fatalf("template %s still contains hardcoded donisgo import:\n%s", tc.name, tc.got)
+			// Framework imports must never be rewritten to the consumer module.
+			// Match the exact quoted import so the legitimate app-owned
+			// "<app>/plugins/<id>/handlers" path does not trip the check.
+			for _, bad := range []string{
+				`"` + appMod + `/plugins"`,
+				`"` + appMod + `/events"`,
+			} {
+				if strings.Contains(tc.got, bad) {
+					t.Fatalf("template %s rewrote a framework import to the app module (%q):\n%s",
+						tc.name, bad, tc.got)
+				}
 			}
-			for _, w := range tc.want {
+			for _, w := range tc.wantFramework {
 				if !strings.Contains(tc.got, w) {
-					t.Errorf("template %s missing %q in:\n%s", tc.name, w, tc.got)
+					t.Errorf("template %s missing framework import %q in:\n%s", tc.name, w, tc.got)
+				}
+			}
+			for _, w := range tc.wantApp {
+				if !strings.Contains(tc.got, w) {
+					t.Errorf("template %s missing app import/user code %q in:\n%s", tc.name, w, tc.got)
 				}
 			}
 		})
@@ -155,7 +180,7 @@ func TestPluginTemplates_FormatSource(t *testing.T) {
 				files["middleware/sample.go"] = pluginMiddlewareTemplate(id)
 			}
 			files["plugin.go"] = pluginGo
-			files["events.go"] = pluginEventsTemplate(pkgName, id, mod)
+			files["events.go"] = pluginEventsTemplate(pkgName, id)
 
 			label := fmt.Sprintf("%s/console=%t", tmpl, includeConsole)
 			for name, src := range files {
@@ -236,4 +261,72 @@ func TestPluginNew_ScaffoldIsGoFmtClean(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestPluginNew_ConsumerModuleImports isolates the issue #13 regression: run the
+// generator end to end inside a *consumer* module whose path is not donisgo, and
+// assert that the framework packages are still imported from frameworkModulePath
+// while the application-owned packages follow the consumer's go.mod.
+func TestPluginNew_ConsumerModuleImports(t *testing.T) {
+	const appMod = "example.com/historic_service"
+
+	dir := t.TempDir()
+	writeGoMod(t, dir, "module "+appMod+"\n\ngo 1.25.3\n")
+	t.Chdir(dir)
+
+	pluginNewID = "billing"
+	pluginNewName = ""
+	pluginNewTmpl = "minimal"
+	pluginSkipConsole = false
+	if err := pluginNewCmd.RunE(pluginNewCmd, nil); err != nil {
+		t.Fatalf("plugin new: %v", err)
+	}
+
+	base := filepath.Join("plugins", "billing")
+	pluginSrc := mustReadFile(t, filepath.Join(base, "plugin.go"))
+	eventsSrc := mustReadFile(t, filepath.Join(base, "events.go"))
+
+	// Framework imports must point at donisgo, never at the consumer module.
+	for _, want := range []string{
+		`"` + frameworkModulePath + `/plugins"`,
+		`pluginhandlers "` + appMod + `/plugins/billing/handlers"`,
+	} {
+		if !strings.Contains(pluginSrc, want) {
+			t.Errorf("plugin.go missing %q:\n%s", want, pluginSrc)
+		}
+	}
+	for _, bad := range []string{
+		`"` + appMod + `/plugins"`,
+	} {
+		if strings.Contains(pluginSrc, bad) {
+			t.Errorf("plugin.go wrongly rewrote framework import to consumer module (%q):\n%s", bad, pluginSrc)
+		}
+	}
+	if !strings.Contains(eventsSrc, `"`+frameworkModulePath+`/events"`) {
+		t.Errorf("events.go must import the framework events package:\n%s", eventsSrc)
+	}
+	if strings.Contains(eventsSrc, `"`+appMod+`/events"`) {
+		t.Errorf("events.go wrongly imports the consumer module's events package:\n%s", eventsSrc)
+	}
+
+	// Every generated file must still be valid, gofmt-clean Go.
+	for name, src := range map[string]string{"plugin.go": pluginSrc, "events.go": eventsSrc} {
+		formatted, err := format.Source([]byte(src))
+		if err != nil {
+			t.Errorf("%s is not valid Go: %v\n%s", name, err, src)
+			continue
+		}
+		if string(formatted) != src {
+			t.Errorf("%s is not gofmt-clean\n--- got ---\n%s", name, src)
+		}
+	}
+}
+
+func mustReadFile(t *testing.T, path string) string {
+	t.Helper()
+	src, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	return string(src)
 }
