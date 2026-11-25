@@ -95,14 +95,14 @@ Main components
 - Bootstrap & wiring: `internal/app/bootstrap.go`
 - Business services: `internal/admin/services`
 - Database (GORM): `internal/db/gorm.go`
-- Auth utilities (JWT): `internal/auth` (token generation/verification helpers)
+- Auth utilities (JWT): `auth` (token generation/verification helpers)
 - Plugin system: `internal/pluginloader` and `internal/plugins`
 - CLI / migrations: `internal/console`
-- Mailer: `internal/mail`
+- Mailer: `mail`
 - KeyDB/Redis client: `internal/keydb`
-- Storage abstraction: `internal/storage`
+- Storage abstraction: `storage`
 - Events: `internal/events`
-- UUID v7 generator: `internal/uuid`
+- UUID v7 generator: `uuid`
 
 Events
 ------
@@ -277,7 +277,7 @@ Auth
 ----
 This framework provides JWT utilities but does not include built-in authentication services or middleware. Authentication should be implemented via plugins or custom code.
 
-JWT utilities available (`internal/auth`)
+JWT utilities available (`auth`)
 -----------------------------------------
 
 **Basic JWT functions** (`jwt.go`):
@@ -330,7 +330,7 @@ Implementation notes:
 - JWT tokens do NOT interact with database - you query the database separately using the ID from the token
 - Column names and table structure are completely up to you - JWT only returns the data you encoded (userID, adminID, etc.)
 - Implement authentication in a plugin (recommended) or in your own services
-- Use the JWT utilities in `internal/auth` for token generation and verification
+- Use the JWT utilities in `auth` for token generation and verification
 - Design your own middleware to validate tokens and inject user identity into `context.Context`
 - Pass `context.Context` to service methods to propagate request identity
 
@@ -398,7 +398,7 @@ package mytest
 import (
     "testing"
     "time"
-    "github.com/rolldone/donisgo/internal/auth"
+    "github.com/rolldone/donisgo/auth"
 )
 
 func TestJWT(t *testing.T) {
@@ -449,7 +449,7 @@ func TestJWTWithClaims(t *testing.T) {
 ```
 
 Testing
-- Unit-test auth-related logic by mocking token generation/verification helpers. Look at `internal/mail/mailer_test.go` for examples of structure and patterns.
+- Unit-test auth-related logic by mocking token generation/verification helpers. Look at `mail/mailer_test.go` for examples of structure and patterns.
 
 DB
 --
@@ -873,7 +873,7 @@ Request flow (execution order)
    - Note: Authentication middleware is NOT included by default — implement in a plugin
 4. After middleware, the matched handler runs (plugin-registered handlers or custom handlers).
 5. Handler calls into plugin services or custom code for business logic, DB interactions, storage, or cache usage.
-6. Shared dependencies come from bootstrap: GORM (`internal/db/gorm.go`), storage (`internal/storage`), and optional KeyDB (`internal/keydb`).
+6. Shared dependencies come from bootstrap: GORM (`internal/db/gorm.go`), storage (`storage`), and optional KeyDB (`internal/keydb`).
 7. Handler serializes the response (JSON/HTML) and returns it to the client.
 8. Plugin hooks or response middleware may modify the response before it is sent.
 
@@ -902,7 +902,7 @@ Extension points & best practices
 - Use the transaction helper `db.WithTransaction()` in `internal/db/tx.go` to simplify error handling
 
 **Testing:**
-- Mock DB and services for unit testing; see `internal/mail/mailer_test.go` for example patterns
+- Mock DB and services for unit testing; see `mail/mailer_test.go` for example patterns
 - Test plugins in isolation by providing test `*gorm.DB` and, when needed, a fake `storage.Store`
 - Use `go run ./cmd/console migrate --db <type> up` to run migrations in test databases
 
@@ -922,10 +922,10 @@ Quick file references
 - Plugin types: `internal/plugins/types.go`
 - DB (GORM): `internal/db/gorm.go`
 - DB transactions: `internal/db/tx.go`
-- Auth utilities (JWT): `internal/auth/jwt.go`
-- Storage: `internal/storage/config.go`
+- Auth utilities (JWT): `auth/jwt.go`
+- Storage: `storage/config.go`
 - Console commands: `internal/console/`
-- Mailer: `internal/mail/mailer.go`
+- Mailer: `mail/mailer.go`
 - KeyDB client: `internal/keydb/client.go`
 
 Request Flow Diagram
@@ -940,7 +940,7 @@ flowchart LR
 
    subgraph Middlewares
       Core[Core middleware: logging, recovery, CORS, request-id]
-      Auth[Auth middleware: internal/auth]
+      Auth[Auth middleware: auth]
       PluginMW[Plugin middleware (priority-based)]
    end
 
