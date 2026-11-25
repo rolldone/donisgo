@@ -62,7 +62,7 @@ tidak menambah nilai, hanya menambah panjang import.
 | `events` | **PUBLIK** | Bus pub/sub; de-globalisasi via `events.Bus` (D3). |
 | `keydb` | **PUBLIK** | `Flash` + client; `var Client` global dihapus (D3). |
 | `app` | **PUBLIK (fase akhir)** | Wajah wiring: `app.Config` + `app.New`. Dieksekusi terakhir karena paling banyak digali. |
-| `console` | internal | CLI tooling `cmd/console` — detail implementasi framework. |
+| `console` | **PUBLIK** (amendemen 2026-11-25) | CLI tooling `cmd/console` — dipromosikan sejak `v0.1.2` (`04bd40b`): sub-app & tooling lain memakai ulang command CLI framework. Lihat Log Amendemen. |
 | `pluginloader` | internal | Wiring registry plugin — dipanggil dari `app`, bukan API publik. |
 
 ### D3 — Wiring injektable: hapus global state
@@ -127,6 +127,12 @@ err = application.Run()
 
 Gerbang kualitas tiap fase: `gofmt -l .` kosong, `go vet ./...`, `go build ./...`,
 `go test ./...` hijau, commit pesan eksplisit per fase.
+
+### Log Amendemen
+
+| Tanggal | Keputusan | Alasan & bukti |
+|---|---|---|
+| 2026-11-25 | **D2** — `console`: internal → **PUBLIK** | Dipromosikan sejak rilis `v0.1.2` (commit `04bd40b`): sub-app & tooling lain perlu memakai ulang command CLI framework; `internal/` kini hanya `pluginloader` — tetap internal (lem wiring, konsumennya hanya `app` & `console` di dalam modul). Disetujui pemilik repo. (Historic topic `1795594944725`, issue #16) |
 
 ## 5. Dampak & Migrasi
 
