@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rolldone/donisgo/internal/events"
+	"github.com/rolldone/donisgo/events"
 )
 
 // TestPublishSubscribe demonstrates basic usage of the events package:

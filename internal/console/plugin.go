@@ -466,7 +466,7 @@ import (
 	"context"
 	"log"
 
-	"%s/internal/events"
+	"%s/events"
 )
 
 // registerEventHandlers registers example event handlers for the plugin.

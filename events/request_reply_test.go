@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rolldone/donisgo/internal/events"
+	"github.com/rolldone/donisgo/events"
 )
 
 // TestRequestReply demonstrates a safe request-reply pattern using RequestReply.

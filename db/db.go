@@ -11,7 +11,12 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// GetDB returns a *sql.DB connected using MIGRATE_DB_URL from environment (.env loaded if present)
+// GetDB returns a *sql.DB connected using the DB_* environment variables
+// (.env loaded if present).
+//
+// Deprecated: use Open(cfg) with an explicit Config, or open a *sql.DB handle
+// that your application owns. GetDB is kept for backward compatibility with
+// existing CLI/scaffold code until v1.0.
 func GetDB() (*sql.DB, error) {
 	// Use Overload so running the CLI (`./bin/console ...`) re-reads the
 	// `.env` file and overwrites any existing process environment values.
@@ -22,10 +27,7 @@ func GetDB() (*sql.DB, error) {
 	dsn := ""
 	dbType := os.Getenv("DB_TYPE")
 	var driverName string
-	// Build DSN from individual DB_* env vars.
-	// MIGRATE_DB_URL is intentionally ignored.
 	{
-		// Build DSN from individual DB_* env vars if MIGRATE_DB_URL is not provided.
 		host := os.Getenv("DB_HOST")
 		port := os.Getenv("DB_PORT")
 		user := os.Getenv("DB_USER")
@@ -65,6 +67,7 @@ func GetDB() (*sql.DB, error) {
 		return nil, err
 	}
 	if err := db.Ping(); err != nil {
+		_ = db.Close()
 		return nil, err
 	}
 	return db, nil
